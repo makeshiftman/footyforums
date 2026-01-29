@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-28)
 
 ## Current Position
 
-Phase: 8 of 16 (Import Execution & Verification)
-Plan: 1 of 3 — 08-01 Import Runner (checkpoint verification pending)
-Status: Import runs successfully, awaiting user approval to continue
-Last activity: 2026-01-29 — Milestone v2.0 ESPN Complete Rebuild created (8 phases)
+Phase: 9 of 16 (Endpoint Research & Discovery)
+Plan: Not started
+Status: Ready to start Phase 9 research
+Last activity: 2026-01-29 — Phase 8 paused (blocked on ESPN data)
 
-Progress: █████░░░░░ 50% (8/16 phases, v1.0 at 90%)
+Progress: █████░░░░░ 50% (8/16 phases)
 
 ## Milestones
 
@@ -73,7 +73,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Data gap:** clubs table may not have full team import from e_db — explains low match rate (164/1713)
+- **Phase 8 blocked:** Can't complete CSV import until ESPN club data is scraped. Need to:
+  1. Scrape ESPN data for 218 known teams
+  2. Find leagues/countries in CSV that aren't in current ESPN data
+  3. Discover ESPN league codes for missing leagues and scrape those too
+  4. Then return to Phase 8 to match CSV against complete club data
 - **Working directory:** Must use `/Users/kevincasey/Local Sites/footyforums` (NOT Desktop copy)
 
 ### Roadmap Evolution
@@ -87,7 +91,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Created v2.0 milestone, v1.0 Phase 8 still in progress
+Stopped at: Phase 8 paused (blocked on ESPN data), starting Phase 9
 Resume with:
-- v1.0: `/gsd:execute-phase 8` then type "approved" at checkpoint
-- v2.0: `/gsd:research-phase 9` or `/gsd:plan-phase 9` when ready
+- Phase 9: `/gsd:research-phase 9` — exhaustive ESPN endpoint research
+- Phase 8: Return after ESPN data scraped to complete CSV import
