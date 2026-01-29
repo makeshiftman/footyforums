@@ -5,16 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-28)
 
 **Core value:** Accurate, reconciled football data from multiple sources with clear provenance
-**Current focus:** Phase 8 — Import Execution (In Progress)
+**Current focus:** v1.0 Phase 8 in progress, v2.0 ESPN Complete Rebuild planned
 
 ## Current Position
 
-Phase: 8 of 8 (Import Execution & Verification)
+Phase: 8 of 16 (Import Execution & Verification)
 Plan: 1 of 3 — 08-01 Import Runner (checkpoint verification pending)
 Status: Import runs successfully, awaiting user approval to continue
-Last activity: 2026-01-29 — CSV import tested (164 auto-applied, 1549 queued)
+Last activity: 2026-01-29 — Milestone v2.0 ESPN Complete Rebuild created (8 phases)
 
-Progress: █████████░ 90%
+Progress: █████░░░░░ 50% (8/16 phases, v1.0 at 90%)
+
+## Milestones
+
+| Milestone | Phases | Status |
+|-----------|--------|--------|
+| v1.0 Club ID Mapping | 1-8 | In progress (Phase 8) |
+| v2.0 ESPN Complete Rebuild | 9-16 | Planned |
 
 ## Performance Metrics
 
@@ -67,10 +74,20 @@ None yet.
 ### Blockers/Concerns
 
 - **Data gap:** clubs table may not have full team import from e_db — explains low match rate (164/1713)
-- **Working directory:** Must use `/Users/kevincasey/Local Sites/footyforums` (not Desktop copy)
+- **Working directory:** Must use `/Users/kevincasey/Local Sites/footyforums` (NOT Desktop copy)
+
+### Roadmap Evolution
+
+- 2026-01-29: Milestone v2.0 ESPN Complete Rebuild created (8 phases: 9-16)
+  - Archive current e_db and start fresh
+  - Exhaustive endpoint research + manual verification
+  - Data availability matrix for 2001-2025
+  - Progress tracking UI
 
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Phase 8, Plan 08-01 checkpoint — import works, awaiting approval
-Resume with: `/gsd:execute-phase 8` then type "approved" at checkpoint
+Stopped at: Created v2.0 milestone, v1.0 Phase 8 still in progress
+Resume with:
+- v1.0: `/gsd:execute-phase 8` then type "approved" at checkpoint
+- v2.0: `/gsd:research-phase 9` or `/gsd:plan-phase 9` when ready
