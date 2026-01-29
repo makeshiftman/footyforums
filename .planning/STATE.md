@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-28)
 
 **Core value:** Accurate, reconciled football data from multiple sources with clear provenance
-**Current focus:** Phase 7 — Review UI (Complete)
+**Current focus:** Phase 8 — Import Execution (In Progress)
 
 ## Current Position
 
-Phase: 7 of 8 (Review UI) - Complete
-Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-01-29 — Completed 07-01-PLAN.md (Review UI)
+Phase: 8 of 8 (Import Execution & Verification)
+Plan: 1 of 3 — 08-01 Import Runner (checkpoint verification pending)
+Status: Import runs successfully, awaiting user approval to continue
+Last activity: 2026-01-29 — CSV import tested (164 auto-applied, 1549 queued)
 
-Progress: █████████░ 87.5%
+Progress: █████████░ 90%
 
 ## Performance Metrics
 
@@ -66,10 +66,11 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- **Data gap:** clubs table may not have full team import from e_db — explains low match rate (164/1713)
+- **Working directory:** Must use `/Users/kevincasey/Local Sites/footyforums` (not Desktop copy)
 
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Completed Phase 7 (Review UI)
-Resume file: None
+Stopped at: Phase 8, Plan 08-01 checkpoint — import works, awaiting approval
+Resume with: `/gsd:execute-phase 8` then type "approved" at checkpoint
