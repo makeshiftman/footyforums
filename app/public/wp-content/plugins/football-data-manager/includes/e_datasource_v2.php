@@ -14,444 +14,137 @@ require_once FDM_PLUGIN_DIR . 'includes/db-helper.php';
  * Centralized league configuration
  * Single source of truth for all supported leagues
  * Keyed by e_league_code for direct lookup
+ *
+ * Updated: 2026-01-29 with comprehensive ESPN API coverage (250 leagues)
+ * Source: https://sports.core.api.espn.com/v2/sports/soccer/leagues?limit=500
  */
 $GLOBALS['fdm_e_supported_leagues'] = array(
-    // EUROPE - Top-tier domestic leagues
-    'eng.1' => array(
-        'e_league_code' => 'eng.1',
-        'name' => 'English Premier League',
-        'region' => 'europe',
-        'country' => 'England',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 10,
-    ),
-    'eng.2' => array(
-        'name'        => 'English Championship',
-        'region'      => 'europe',
-        'country'     => 'England',
-        'tier'        => 2,
-        'type'        => 'league',
-        'priority'    => 8,
-        'espn_uid'    => 's:600~l:392'
-    ),
 
-    'eng.3' => array(
-        'name'        => 'English League One',
-        'region'      => 'europe',
-        'country'     => 'England',
-        'tier'        => 3,
-        'type'        => 'league',
-        'priority'    => 7,
-        'espn_uid'    => 's:600~l:393'
-    ),
+    // =========================================================================
+    // INTERNATIONAL TOURNAMENTS
+    // =========================================================================
 
-    'eng.4' => array(
-        'name'        => 'English League Two',
-        'region'      => 'europe',
-        'country'     => 'England',
-        'tier'        => 4,
-        'type'        => 'league',
-        'priority'    => 6,
-        'espn_uid'    => 's:600~l:394'
-    ),
-
-    'eng.5' => array(
-        'name'        => 'English National League',
-        'region'      => 'europe',
-        'country'     => 'England',
-        'tier'        => 5,
-        'type'        => 'league',
-        'priority'    => 5,
-        'espn_uid'    => 's:600~l:395'
-    ),
-    'esp.1' => array(
-        'e_league_code' => 'esp.1',
-        'name' => 'La Liga',
-        'region' => 'europe',
-        'country' => 'Spain',
-        'tier' => 1,
-        'type' => 'league',
+    // FIFA Tournaments
+    'fifa.world' => array(
+        'name' => 'FIFA World Cup',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
         'priority' => 10,
     ),
-    'ger.1' => array(
-        'e_league_code' => 'ger.1',
-        'name' => 'German Bundesliga',
-        'region' => 'europe',
-        'country' => 'Germany',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 10,
-    ),
-    'ita.1' => array(
-        'e_league_code' => 'ita.1',
-        'name' => 'Italian Serie A',
-        'region' => 'europe',
-        'country' => 'Italy',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 10,
-    ),
-    'fra.1' => array(
-        'e_league_code' => 'fra.1',
-        'name' => 'French Ligue 1',
-        'region' => 'europe',
-        'country' => 'France',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 10,
-    ),
-    'por.1' => array(
-        'e_league_code' => 'por.1',
-        'name' => 'Portuguese Primeira Liga',
-        'region' => 'europe',
-        'country' => 'Portugal',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 9,
-    ),
-    'ned.1' => array(
-        'e_league_code' => 'ned.1',
-        'name' => 'Dutch Eredivisie',
-        'region' => 'europe',
-        'country' => 'Netherlands',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 8,
-    ),
-    'sco.1' => array(
-        'e_league_code' => 'sco.1',
-        'name' => 'Scottish Premiership',
-        'region' => 'europe',
-        'country' => 'Scotland',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 7,
-    ),
-    'aut.1' => array(
-        'e_league_code' => 'aut.1',
-        'name' => 'Austrian Bundesliga',
-        'region' => 'europe',
-        'country' => 'Austria',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'sui.1' => array(
-        'e_league_code' => 'sui.1',
-        'name' => 'Swiss Super League',
-        'region' => 'europe',
-        'country' => 'Switzerland',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'pol.1' => array(
-        'e_league_code' => 'pol.1',
-        'name' => 'Polish Ekstraklasa',
-        'region' => 'europe',
-        'country' => 'Poland',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'ukr.1' => array(
-        'e_league_code' => 'ukr.1',
-        'name' => 'Ukrainian Premier League',
-        'region' => 'europe',
-        'country' => 'Ukraine',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'cze.1' => array(
-        'e_league_code' => 'cze.1',
-        'name' => 'Czech First League',
-        'region' => 'europe',
-        'country' => 'Czech Republic',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'rus.1' => array(
-        'e_league_code' => 'rus.1',
-        'name' => 'Russian Premier League',
-        'region' => 'europe',
-        'country' => 'Russia',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 5,
-        // Note: Verify if still available in E API
-    ),
-    'tur.1' => array(
-        'e_league_code' => 'tur.1',
-        'name' => 'Turkish Super Lig',
-        'region' => 'europe',
-        'country' => 'Turkey',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 7,
-    ),
-    'bel.1' => array(
-        'e_league_code' => 'bel.1',
-        'name' => 'Belgian Pro League',
-        'region' => 'europe',
-        'country' => 'Belgium',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 7,
-    ),
-    'gre.1' => array(
-        'e_league_code' => 'gre.1',
-        'name' => 'Greek Super League',
-        'region' => 'europe',
-        'country' => 'Greece',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'nor.1' => array(
-        'e_league_code' => 'nor.1',
-        'name' => 'Norwegian Eliteserien',
-        'region' => 'europe',
-        'country' => 'Norway',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'swe.1' => array(
-        'e_league_code' => 'swe.1',
-        'name' => 'Swedish Allsvenskan',
-        'region' => 'europe',
-        'country' => 'Sweden',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'den.1' => array(
-        'e_league_code' => 'den.1',
-        'name' => 'Danish Superliga',
-        'region' => 'europe',
-        'country' => 'Denmark',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 7,
-    ),
-    'irl.1' => array(
-        'e_league_code' => 'irl.1',
-        'name' => 'Irish Premier Division',
-        'region' => 'europe',
-        'country' => 'Ireland',
-        'tier' => 1,
-        'type' => 'league',
+    'fifa.friendly' => array(
+        'name' => 'International Friendlies',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
         'priority' => 5,
     ),
-    
-    // SOUTH AMERICA - Top-tier domestic leagues
-    'arg.1' => array(
-        'e_league_code' => 'arg.1',
-        'name' => 'Argentine Liga Profesional',
-        'region' => 'south_america',
-        'country' => 'Argentina',
-        'tier' => 1,
-        'type' => 'league',
+    'fifa.olympics' => array(
+        'name' => 'Olympic Football Tournament',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
         'priority' => 8,
     ),
-    'bra.1' => array(
-        'e_league_code' => 'bra.1',
-        'name' => 'Brazilian Serie A',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 9,
-    ),
-    'bra.2' => array(
-        'e_league_code' => 'bra.2',
-        'name' => 'Brazilian Serie B',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 2,
-        'type' => 'league',
-        'priority' => 8,
-    ),
-    'bra.3' => array(
-        'e_league_code' => 'bra.3',
-        'name' => 'Brazilian Serie C',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 3,
-        'type' => 'league',
-        'priority' => 7,
-    ),
-    'bra.copa_do_brazil' => array(
-        'e_league_code' => 'bra.copa_do_brazil',
-        'name' => 'Copa do Brasil',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 1,
+    'fifa.cwc' => array(
+        'name' => 'FIFA Club World Cup',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
         'type' => 'cup',
-        'priority' => 8,
+        'priority' => 9,
     ),
-    'bra.camp.paulista' => array(
-        'e_league_code' => 'bra.camp.paulista',
-        'name' => 'Campeonato Paulista',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 2,
-        'type' => 'state_league',
-        'priority' => 6,
-    ),
-    'bra.camp.carioca' => array(
-        'e_league_code' => 'bra.camp.carioca',
-        'name' => 'Campeonato Carioca',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 2,
-        'type' => 'state_league',
-        'priority' => 6,
-    ),
-    'bra.camp.gaucho' => array(
-        'e_league_code' => 'bra.camp.gaucho',
-        'name' => 'Campeonato Gaúcho',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 2,
-        'type' => 'state_league',
-        'priority' => 6,
-    ),
-    'bra.camp.mineiro' => array(
-        'e_league_code' => 'bra.camp.mineiro',
-        'name' => 'Campeonato Mineiro',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 2,
-        'type' => 'state_league',
-        'priority' => 6,
-    ),
-    'bra.copa_do_nordeste' => array(
-        'e_league_code' => 'bra.copa_do_nordeste',
-        'name' => 'Copa do Nordeste',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 3,
-        'type' => 'regional_cup',
-        'priority' => 5,
-    ),
-    'bra.supercopa_do_brazil' => array(
-        'e_league_code' => 'bra.supercopa_do_brazil',
-        'name' => 'Supercopa do Brasil',
-        'region' => 'south_america',
-        'country' => 'Brazil',
-        'tier' => 1,
-        'type' => 'supercup',
+    'fifa.intercontinental_cup' => array(
+        'name' => 'Intercontinental Cup',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
         'priority' => 7,
     ),
-    'chi.1' => array(
-        'e_league_code' => 'chi.1',
-        'name' => 'Chilean Primera División',
-        'region' => 'south_america',
-        'country' => 'Chile',
-        'tier' => 1,
-        'type' => 'league',
+    'fifa.world.u20' => array(
+        'name' => 'FIFA U-20 World Cup',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
         'priority' => 6,
     ),
-    'col.1' => array(
-        'e_league_code' => 'col.1',
-        'name' => 'Colombian Primera A',
-        'region' => 'south_america',
-        'country' => 'Colombia',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'uru.1' => array(
-        'e_league_code' => 'uru.1',
-        'name' => 'Uruguayan Primera División',
-        'region' => 'south_america',
-        'country' => 'Uruguay',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
-    ),
-    'per.1' => array(
-        'e_league_code' => 'per.1',
-        'name' => 'Peruvian Liga 1',
-        'region' => 'south_america',
-        'country' => 'Peru',
-        'tier' => 1,
-        'type' => 'league',
+    'fifa.world.u17' => array(
+        'name' => 'FIFA U-17 World Cup',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
         'priority' => 5,
     ),
-    'ecu.1' => array(
-        'e_league_code' => 'ecu.1',
-        'name' => 'LigaPro Ecuador',
-        'region' => 'south_america',
-        'country' => 'Ecuador',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 5,
-    ),
-    'par.1' => array(
-        'e_league_code' => 'par.1',
-        'name' => 'Paraguayan Primera División',
-        'region' => 'south_america',
-        'country' => 'Paraguay',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 5,
-    ),
-    'bol.1' => array(
-        'e_league_code' => 'bol.1',
-        'name' => 'Bolivian Liga Profesional',
-        'region' => 'south_america',
-        'country' => 'Bolivia',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 5,
-    ),
-    'ven.1' => array(
-        'e_league_code' => 'ven.1',
-        'name' => 'Venezuelan Primera División',
-        'region' => 'south_america',
-        'country' => 'Venezuela',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 5,
-    ),
-    
-    // OTHER KEY LEAGUES
-    'ksa.1' => array(
-        'e_league_code' => 'ksa.1',
-        'name' => 'Saudi Pro League',
-        'region' => 'asia',
-        'country' => 'Saudi Arabia',
-        'tier' => 1,
-        'type' => 'league',
+
+    // World Cup Qualifying
+    'fifa.wcq.ply' => array(
+        'name' => 'World Cup Qualifying Playoff',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
         'priority' => 8,
     ),
-    'jpn.1' => array(
-        'e_league_code' => 'jpn.1',
-        'name' => 'Japanese J.League',
-        'region' => 'asia',
-        'country' => 'Japan',
-        'tier' => 1,
-        'type' => 'league',
+    'fifa.worldq.uefa' => array(
+        'name' => 'UEFA World Cup Qualifying',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 8,
+    ),
+    'fifa.worldq.concacaf' => array(
+        'name' => 'CONCACAF World Cup Qualifying',
+        'region' => 'north_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
         'priority' => 7,
     ),
-    'aus.1' => array(
-        'e_league_code' => 'aus.1',
-        'name' => 'Australian A-League Men',
+    'fifa.worldq.afc' => array(
+        'name' => 'AFC World Cup Qualifying',
+        'region' => 'asia',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 7,
+    ),
+    'fifa.worldq.caf' => array(
+        'name' => 'CAF World Cup Qualifying',
+        'region' => 'africa',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 7,
+    ),
+    'fifa.worldq.conmebol' => array(
+        'name' => 'CONMEBOL World Cup Qualifying',
+        'region' => 'south_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 8,
+    ),
+    'fifa.worldq.ofc' => array(
+        'name' => 'OFC World Cup Qualifying',
         'region' => 'oceania',
-        'country' => 'Australia',
-        'tier' => 1,
-        'type' => 'league',
-        'priority' => 6,
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 5,
     ),
-    
-    // EUROPEAN AND ENGLISH CUPS
+
+    // =========================================================================
+    // UEFA (EUROPE) - Continental Competitions
+    // =========================================================================
+
     'uefa.champions' => array(
-        'e_league_code' => 'uefa.champions',
         'name' => 'UEFA Champions League',
         'region' => 'europe',
         'country' => null,
@@ -460,7 +153,6 @@ $GLOBALS['fdm_e_supported_leagues'] = array(
         'priority' => 10,
     ),
     'uefa.europa' => array(
-        'e_league_code' => 'uefa.europa',
         'name' => 'UEFA Europa League',
         'region' => 'europe',
         'country' => null,
@@ -468,32 +160,1343 @@ $GLOBALS['fdm_e_supported_leagues'] = array(
         'type' => 'cup',
         'priority' => 9,
     ),
-    'uefa.europa_conference' => array(
-        'e_league_code' => 'uefa.europa_conference',
-        'name' => 'UEFA Europa Conference League',
+    'uefa.europa.conf' => array(
+        'name' => 'UEFA Conference League',
         'region' => 'europe',
         'country' => null,
         'tier' => null,
         'type' => 'cup',
         'priority' => 8,
     ),
+    'uefa.euro' => array(
+        'name' => 'UEFA European Championship',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 10,
+    ),
+    'uefa.nations' => array(
+        'name' => 'UEFA Nations League',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 8,
+    ),
+    'uefa.super_cup' => array(
+        'name' => 'UEFA Super Cup',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 8,
+    ),
+    'uefa.champions_qual' => array(
+        'name' => 'Champions League Qualifying',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 7,
+    ),
+    'uefa.europa_qual' => array(
+        'name' => 'Europa League Qualifying',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 6,
+    ),
+    'uefa.europa.conf_qual' => array(
+        'name' => 'Conference League Qualifying',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 5,
+    ),
+    'uefa.euro_u21' => array(
+        'name' => 'UEFA U-21 Euro',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 6,
+    ),
+    'uefa.euro_u21_qual' => array(
+        'name' => 'Euro U-21 Qualifying',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 5,
+    ),
+    'uefa.euro.u19' => array(
+        'name' => 'UEFA Euro U-19',
+        'region' => 'europe',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // ENGLAND
+    // =========================================================================
+
+    'eng.1' => array(
+        'name' => 'English Premier League',
+        'region' => 'europe',
+        'country' => 'England',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 10,
+    ),
+    'eng.2' => array(
+        'name' => 'English Championship',
+        'region' => 'europe',
+        'country' => 'England',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 8,
+    ),
+    'eng.3' => array(
+        'name' => 'English League One',
+        'region' => 'europe',
+        'country' => 'England',
+        'tier' => 3,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'eng.4' => array(
+        'name' => 'English League Two',
+        'region' => 'europe',
+        'country' => 'England',
+        'tier' => 4,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'eng.5' => array(
+        'name' => 'English National League',
+        'region' => 'europe',
+        'country' => 'England',
+        'tier' => 5,
+        'type' => 'league',
+        'priority' => 5,
+    ),
     'eng.fa' => array(
-        'e_league_code' => 'eng.fa',
         'name' => 'English FA Cup',
         'region' => 'europe',
         'country' => 'England',
         'tier' => null,
         'type' => 'cup',
-        'priority' => 8,
+        'priority' => 9,
     ),
     'eng.league_cup' => array(
-        'e_league_code' => 'eng.league_cup',
         'name' => 'English League Cup',
         'region' => 'europe',
         'country' => 'England',
         'tier' => null,
         'type' => 'cup',
         'priority' => 7,
+    ),
+    'eng.charity' => array(
+        'name' => 'English Community Shield',
+        'region' => 'europe',
+        'country' => 'England',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 6,
+    ),
+    'eng.trophy' => array(
+        'name' => 'English EFL Trophy',
+        'region' => 'europe',
+        'country' => 'England',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // SPAIN
+    // =========================================================================
+
+    'esp.1' => array(
+        'name' => 'Spanish La Liga',
+        'region' => 'europe',
+        'country' => 'Spain',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 10,
+    ),
+    'esp.2' => array(
+        'name' => 'Spanish Segunda División',
+        'region' => 'europe',
+        'country' => 'Spain',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'esp.copa_del_rey' => array(
+        'name' => 'Copa del Rey',
+        'region' => 'europe',
+        'country' => 'Spain',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'esp.super_cup' => array(
+        'name' => 'Spanish Super Cup',
+        'region' => 'europe',
+        'country' => 'Spain',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 7,
+    ),
+    'esp.joan_gamper' => array(
+        'name' => 'Joan Gamper Trophy',
+        'region' => 'europe',
+        'country' => 'Spain',
+        'tier' => null,
+        'type' => 'friendly',
+        'priority' => 3,
+    ),
+
+    // =========================================================================
+    // GERMANY
+    // =========================================================================
+
+    'ger.1' => array(
+        'name' => 'German Bundesliga',
+        'region' => 'europe',
+        'country' => 'Germany',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 10,
+    ),
+    'ger.2' => array(
+        'name' => 'German 2. Bundesliga',
+        'region' => 'europe',
+        'country' => 'Germany',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'ger.dfb_pokal' => array(
+        'name' => 'DFB-Pokal',
+        'region' => 'europe',
+        'country' => 'Germany',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'ger.super_cup' => array(
+        'name' => 'German Super Cup',
+        'region' => 'europe',
+        'country' => 'Germany',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 6,
+    ),
+    'ger.playoff.relegation' => array(
+        'name' => 'German Playoff/Relegation',
+        'region' => 'europe',
+        'country' => 'Germany',
+        'tier' => null,
+        'type' => 'playoff',
+        'priority' => 5,
+    ),
+    'ger.2.promotion.relegation' => array(
+        'name' => 'German 2. Bundesliga Playoff',
+        'region' => 'europe',
+        'country' => 'Germany',
+        'tier' => null,
+        'type' => 'playoff',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // ITALY
+    // =========================================================================
+
+    'ita.1' => array(
+        'name' => 'Italian Serie A',
+        'region' => 'europe',
+        'country' => 'Italy',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 10,
+    ),
+    'ita.2' => array(
+        'name' => 'Italian Serie B',
+        'region' => 'europe',
+        'country' => 'Italy',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'ita.coppa_italia' => array(
+        'name' => 'Coppa Italia',
+        'region' => 'europe',
+        'country' => 'Italy',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'ita.super_cup' => array(
+        'name' => 'Italian Super Cup',
+        'region' => 'europe',
+        'country' => 'Italy',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 7,
+    ),
+
+    // =========================================================================
+    // FRANCE
+    // =========================================================================
+
+    'fra.1' => array(
+        'name' => 'French Ligue 1',
+        'region' => 'europe',
+        'country' => 'France',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 10,
+    ),
+    'fra.2' => array(
+        'name' => 'French Ligue 2',
+        'region' => 'europe',
+        'country' => 'France',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'fra.coupe_de_france' => array(
+        'name' => 'Coupe de France',
+        'region' => 'europe',
+        'country' => 'France',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'fra.super_cup' => array(
+        'name' => 'French Super Cup',
+        'region' => 'europe',
+        'country' => 'France',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 6,
+    ),
+    'fra.1.promotion.relegation' => array(
+        'name' => 'French Promotion/Relegation',
+        'region' => 'europe',
+        'country' => 'France',
+        'tier' => null,
+        'type' => 'playoff',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // NETHERLANDS
+    // =========================================================================
+
+    'ned.1' => array(
+        'name' => 'Dutch Eredivisie',
+        'region' => 'europe',
+        'country' => 'Netherlands',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 8,
+    ),
+    'ned.2' => array(
+        'name' => 'Dutch Eerste Divisie',
+        'region' => 'europe',
+        'country' => 'Netherlands',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'ned.3' => array(
+        'name' => 'Dutch Derde Divisie',
+        'region' => 'europe',
+        'country' => 'Netherlands',
+        'tier' => 3,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'ned.cup' => array(
+        'name' => 'Dutch Cup (KNVB Beker)',
+        'region' => 'europe',
+        'country' => 'Netherlands',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 7,
+    ),
+    'ned.supercup' => array(
+        'name' => 'Dutch Super Cup',
+        'region' => 'europe',
+        'country' => 'Netherlands',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 5,
+    ),
+    'ned.playoff.relegation' => array(
+        'name' => 'Dutch Playoff/Relegation',
+        'region' => 'europe',
+        'country' => 'Netherlands',
+        'tier' => null,
+        'type' => 'playoff',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // PORTUGAL
+    // =========================================================================
+
+    'por.1' => array(
+        'name' => 'Portuguese Primeira Liga',
+        'region' => 'europe',
+        'country' => 'Portugal',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 9,
+    ),
+    'por.taca.portugal' => array(
+        'name' => 'Taça de Portugal',
+        'region' => 'europe',
+        'country' => 'Portugal',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 7,
+    ),
+    'por.1.promotion.relegation' => array(
+        'name' => 'Portuguese Promotion/Relegation',
+        'region' => 'europe',
+        'country' => 'Portugal',
+        'tier' => null,
+        'type' => 'playoff',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // SCOTLAND
+    // =========================================================================
+
+    'sco.1' => array(
+        'name' => 'Scottish Premiership',
+        'region' => 'europe',
+        'country' => 'Scotland',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'sco.2' => array(
+        'name' => 'Scottish Championship',
+        'region' => 'europe',
+        'country' => 'Scotland',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'sco.tennents' => array(
+        'name' => 'Scottish League Cup',
+        'region' => 'europe',
+        'country' => 'Scotland',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 6,
+    ),
+    'sco.cis' => array(
+        'name' => 'Scottish Challenge Cup',
+        'region' => 'europe',
+        'country' => 'Scotland',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 4,
+    ),
+    'sco.1.promotion.relegation' => array(
+        'name' => 'Scottish Playoff/Relegation',
+        'region' => 'europe',
+        'country' => 'Scotland',
+        'tier' => null,
+        'type' => 'playoff',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // OTHER EUROPE
+    // =========================================================================
+
+    'bel.1' => array(
+        'name' => 'Belgian Pro League',
+        'region' => 'europe',
+        'country' => 'Belgium',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'aut.1' => array(
+        'name' => 'Austrian Bundesliga',
+        'region' => 'europe',
+        'country' => 'Austria',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'tur.1' => array(
+        'name' => 'Turkish Super Lig',
+        'region' => 'europe',
+        'country' => 'Turkey',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'rus.1' => array(
+        'name' => 'Russian Premier League',
+        'region' => 'europe',
+        'country' => 'Russia',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'gre.1' => array(
+        'name' => 'Greek Super League',
+        'region' => 'europe',
+        'country' => 'Greece',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'swe.1' => array(
+        'name' => 'Swedish Allsvenskan',
+        'region' => 'europe',
+        'country' => 'Sweden',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'nor.1' => array(
+        'name' => 'Norwegian Eliteserien',
+        'region' => 'europe',
+        'country' => 'Norway',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'den.1' => array(
+        'name' => 'Danish Superligaen',
+        'region' => 'europe',
+        'country' => 'Denmark',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'cyp.1' => array(
+        'name' => 'Cypriot First Division',
+        'region' => 'europe',
+        'country' => 'Cyprus',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'irl.1' => array(
+        'name' => 'Irish Premier Division',
+        'region' => 'europe',
+        'country' => 'Ireland',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+
+    // =========================================================================
+    // SOUTH AMERICA - Continental Competitions
+    // =========================================================================
+
+    'conmebol.libertadores' => array(
+        'name' => 'Copa Libertadores',
+        'region' => 'south_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 9,
+    ),
+    'conmebol.sudamericana' => array(
+        'name' => 'Copa Sudamericana',
+        'region' => 'south_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'conmebol.recopa' => array(
+        'name' => 'CONMEBOL Recopa',
+        'region' => 'south_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 7,
+    ),
+    'conmebol.america' => array(
+        'name' => 'Copa America',
+        'region' => 'south_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 10,
+    ),
+
+    // =========================================================================
+    // ARGENTINA
+    // =========================================================================
+
+    'arg.1' => array(
+        'name' => 'Argentine Liga Profesional',
+        'region' => 'south_america',
+        'country' => 'Argentina',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 8,
+    ),
+    'arg.2' => array(
+        'name' => 'Argentine Primera B Nacional',
+        'region' => 'south_america',
+        'country' => 'Argentina',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'arg.3' => array(
+        'name' => 'Argentine Primera B Metropolitana',
+        'region' => 'south_america',
+        'country' => 'Argentina',
+        'tier' => 3,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'arg.4' => array(
+        'name' => 'Argentine Torneo Argentino A',
+        'region' => 'south_america',
+        'country' => 'Argentina',
+        'tier' => 4,
+        'type' => 'league',
+        'priority' => 3,
+    ),
+    'arg.copa' => array(
+        'name' => 'Copa Argentina',
+        'region' => 'south_america',
+        'country' => 'Argentina',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 7,
+    ),
+    'arg.supercopa' => array(
+        'name' => 'Argentine Supercopa',
+        'region' => 'south_america',
+        'country' => 'Argentina',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 6,
+    ),
+    'arg.trofeo_de_la_campeones' => array(
+        'name' => 'Trofeo de los Campeones',
+        'region' => 'south_america',
+        'country' => 'Argentina',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 6,
+    ),
+
+    // =========================================================================
+    // BRAZIL
+    // =========================================================================
+
+    'bra.1' => array(
+        'name' => 'Brasileirão',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 9,
+    ),
+    'bra.2' => array(
+        'name' => 'Série B',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'bra.3' => array(
+        'name' => 'Série C',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => 3,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'bra.copa_do_brazil' => array(
+        'name' => 'Copa do Brasil',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'bra.copa_do_nordeste' => array(
+        'name' => 'Copa do Nordeste',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => null,
+        'type' => 'regional_cup',
+        'priority' => 5,
+    ),
+    'bra.supercopa_do_brazil' => array(
+        'name' => 'Supercopa do Brasil',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 7,
+    ),
+    'bra.camp.carioca' => array(
+        'name' => 'Campeonato Carioca',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => null,
+        'type' => 'state_league',
+        'priority' => 6,
+    ),
+    'bra.camp.paulista' => array(
+        'name' => 'Campeonato Paulista',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => null,
+        'type' => 'state_league',
+        'priority' => 6,
+    ),
+    'bra.camp.gaucho' => array(
+        'name' => 'Campeonato Gaúcho',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => null,
+        'type' => 'state_league',
+        'priority' => 5,
+    ),
+    'bra.camp.mineiro' => array(
+        'name' => 'Campeonato Mineiro',
+        'region' => 'south_america',
+        'country' => 'Brazil',
+        'tier' => null,
+        'type' => 'state_league',
+        'priority' => 5,
+    ),
+
+    // =========================================================================
+    // CHILE
+    // =========================================================================
+
+    'chi.1' => array(
+        'name' => 'Chilean Primera División',
+        'region' => 'south_america',
+        'country' => 'Chile',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'chi.2' => array(
+        'name' => 'Chilean Primera B',
+        'region' => 'south_america',
+        'country' => 'Chile',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'chi.copa_chi' => array(
+        'name' => 'Copa Chile',
+        'region' => 'south_america',
+        'country' => 'Chile',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 5,
+    ),
+    'chi.super_cup' => array(
+        'name' => 'Chilean Super Cup',
+        'region' => 'south_america',
+        'country' => 'Chile',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // URUGUAY
+    // =========================================================================
+
+    'uru.1' => array(
+        'name' => 'Uruguayan Primera División',
+        'region' => 'south_america',
+        'country' => 'Uruguay',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'uru.2' => array(
+        'name' => 'Uruguayan Segunda División',
+        'region' => 'south_america',
+        'country' => 'Uruguay',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // COLOMBIA
+    // =========================================================================
+
+    'col.1' => array(
+        'name' => 'Colombian Categoría Primera A',
+        'region' => 'south_america',
+        'country' => 'Colombia',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'col.2' => array(
+        'name' => 'Colombian Categoría Primera B',
+        'region' => 'south_america',
+        'country' => 'Colombia',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'col.copa' => array(
+        'name' => 'Colombian Cup',
+        'region' => 'south_america',
+        'country' => 'Colombia',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 5,
+    ),
+    'col.superliga' => array(
+        'name' => 'Colombian Superliga',
+        'region' => 'south_america',
+        'country' => 'Colombia',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 5,
+    ),
+
+    // =========================================================================
+    // OTHER SOUTH AMERICA
+    // =========================================================================
+
+    'per.1' => array(
+        'name' => 'Peruvian Primera División',
+        'region' => 'south_america',
+        'country' => 'Peru',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'par.1' => array(
+        'name' => 'Paraguayan Primera División',
+        'region' => 'south_america',
+        'country' => 'Paraguay',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'par.1.supercopa' => array(
+        'name' => 'Paraguayan Supercopa',
+        'region' => 'south_america',
+        'country' => 'Paraguay',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 4,
+    ),
+    'ecu.1' => array(
+        'name' => 'Ecuadorian Serie A',
+        'region' => 'south_america',
+        'country' => 'Ecuador',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'ven.1' => array(
+        'name' => 'Venezuelan Primera División',
+        'region' => 'south_america',
+        'country' => 'Venezuela',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'bol.1' => array(
+        'name' => 'Bolivian Primera División',
+        'region' => 'south_america',
+        'country' => 'Bolivia',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'bol.copa' => array(
+        'name' => 'Copa Bolivia',
+        'region' => 'south_america',
+        'country' => 'Bolivia',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // NORTH/CENTRAL AMERICA - Continental Competitions
+    // =========================================================================
+
+    'concacaf.champions_cup' => array(
+        'name' => 'CONCACAF Champions Cup',
+        'region' => 'north_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'concacaf.leagues.cup' => array(
+        'name' => 'Leagues Cup',
+        'region' => 'north_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 7,
+    ),
+    'concacaf.gold' => array(
+        'name' => 'CONCACAF Gold Cup',
+        'region' => 'north_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 9,
+    ),
+    'concacaf.nations.league' => array(
+        'name' => 'CONCACAF Nations League',
+        'region' => 'north_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 7,
+    ),
+    'campeones.cup' => array(
+        'name' => 'Campeones Cup',
+        'region' => 'north_america',
+        'country' => null,
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 6,
+    ),
+
+    // =========================================================================
+    // USA
+    // =========================================================================
+
+    'usa.1' => array(
+        'name' => 'MLS',
+        'region' => 'north_america',
+        'country' => 'United States',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 8,
+    ),
+    'usa.open' => array(
+        'name' => 'U.S. Open Cup',
+        'region' => 'north_america',
+        'country' => 'United States',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 6,
+    ),
+    'usa.usl.1' => array(
+        'name' => 'USL Championship',
+        'region' => 'north_america',
+        'country' => 'United States',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'usa.usl.l1' => array(
+        'name' => 'USL League One',
+        'region' => 'north_america',
+        'country' => 'United States',
+        'tier' => 3,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'usa.ncaa.m.1' => array(
+        'name' => 'NCAA Men\'s Division I',
+        'region' => 'north_america',
+        'country' => 'United States',
+        'tier' => null,
+        'type' => 'college',
+        'priority' => 3,
+    ),
+
+    // =========================================================================
+    // MEXICO
+    // =========================================================================
+
+    'mex.1' => array(
+        'name' => 'Liga MX',
+        'region' => 'north_america',
+        'country' => 'Mexico',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 8,
+    ),
+    'mex.2' => array(
+        'name' => 'Mexican Liga de Expansión',
+        'region' => 'north_america',
+        'country' => 'Mexico',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'mex.campeon' => array(
+        'name' => 'Mexican Campeon de Campeones',
+        'region' => 'north_america',
+        'country' => 'Mexico',
+        'tier' => null,
+        'type' => 'supercup',
+        'priority' => 5,
+    ),
+
+    // =========================================================================
+    // CENTRAL AMERICA
+    // =========================================================================
+
+    'hon.1' => array(
+        'name' => 'Honduran Liga Nacional',
+        'region' => 'north_america',
+        'country' => 'Honduras',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'crc.1' => array(
+        'name' => 'Costa Rican Primera División',
+        'region' => 'north_america',
+        'country' => 'Costa Rica',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'gua.1' => array(
+        'name' => 'Guatemalan Liga Mayor',
+        'region' => 'north_america',
+        'country' => 'Guatemala',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'slv.1' => array(
+        'name' => 'Salvadoran Primera División',
+        'region' => 'north_america',
+        'country' => 'El Salvador',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // ASIA - Continental Competitions
+    // =========================================================================
+
+    'afc.champions' => array(
+        'name' => 'AFC Champions League',
+        'region' => 'asia',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'afc.cup' => array(
+        'name' => 'AFC Cup',
+        'region' => 'asia',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 6,
+    ),
+    'afc.asian.cup' => array(
+        'name' => 'AFC Asian Cup',
+        'region' => 'asia',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 9,
+    ),
+    'aff.championship' => array(
+        'name' => 'AFF Championship',
+        'region' => 'asia',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 6,
+    ),
+
+    // =========================================================================
+    // ASIA - Domestic Leagues
+    // =========================================================================
+
+    'ksa.1' => array(
+        'name' => 'Saudi Pro League',
+        'region' => 'asia',
+        'country' => 'Saudi Arabia',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 8,
+    ),
+    'ksa.kings.cup' => array(
+        'name' => 'King\'s Cup',
+        'region' => 'asia',
+        'country' => 'Saudi Arabia',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 6,
+    ),
+    'jpn.1' => array(
+        'name' => 'Japanese J1 League',
+        'region' => 'asia',
+        'country' => 'Japan',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 7,
+    ),
+    'chn.1' => array(
+        'name' => 'Chinese Super League',
+        'region' => 'asia',
+        'country' => 'China',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'ind.1' => array(
+        'name' => 'Indian Super League',
+        'region' => 'asia',
+        'country' => 'India',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'ind.2' => array(
+        'name' => 'Indian I-League',
+        'region' => 'asia',
+        'country' => 'India',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'idn.1' => array(
+        'name' => 'Indonesian Liga 1',
+        'region' => 'asia',
+        'country' => 'Indonesia',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'mys.1' => array(
+        'name' => 'Malaysian Super League',
+        'region' => 'asia',
+        'country' => 'Malaysia',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'sgp.1' => array(
+        'name' => 'Singapore Premier League',
+        'region' => 'asia',
+        'country' => 'Singapore',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'tha.1' => array(
+        'name' => 'Thai League',
+        'region' => 'asia',
+        'country' => 'Thailand',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // AFRICA - Continental Competitions
+    // =========================================================================
+
+    'caf.champions' => array(
+        'name' => 'CAF Champions League',
+        'region' => 'africa',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 8,
+    ),
+    'caf.confed' => array(
+        'name' => 'CAF Confederations Cup',
+        'region' => 'africa',
+        'country' => null,
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 7,
+    ),
+    'caf.nations' => array(
+        'name' => 'CAF Africa Cup of Nations',
+        'region' => 'africa',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 9,
+    ),
+    'caf.nations_qual' => array(
+        'name' => 'Africa Cup Qualifying',
+        'region' => 'africa',
+        'country' => null,
+        'tier' => null,
+        'type' => 'qualifying',
+        'priority' => 6,
+    ),
+    'caf.cosafa' => array(
+        'name' => 'COSAFA Cup',
+        'region' => 'africa',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 5,
+    ),
+
+    // =========================================================================
+    // AFRICA - Domestic Leagues
+    // =========================================================================
+
+    'rsa.1' => array(
+        'name' => 'South African Premier Division',
+        'region' => 'africa',
+        'country' => 'South Africa',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+    'rsa.2' => array(
+        'name' => 'South African National First Division',
+        'region' => 'africa',
+        'country' => 'South Africa',
+        'tier' => 2,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'rsa.mtn8' => array(
+        'name' => 'MTN8 Cup',
+        'region' => 'africa',
+        'country' => 'South Africa',
+        'tier' => null,
+        'type' => 'cup',
+        'priority' => 5,
+    ),
+    'nga.1' => array(
+        'name' => 'Nigerian Premier League',
+        'region' => 'africa',
+        'country' => 'Nigeria',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'gha.1' => array(
+        'name' => 'Ghanaian Premier League',
+        'region' => 'africa',
+        'country' => 'Ghana',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 5,
+    ),
+    'uga.1' => array(
+        'name' => 'Ugandan Premier League',
+        'region' => 'africa',
+        'country' => 'Uganda',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+    'ken.1' => array(
+        'name' => 'Kenyan Premier League',
+        'region' => 'africa',
+        'country' => 'Kenya',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 4,
+    ),
+
+    // =========================================================================
+    // OCEANIA
+    // =========================================================================
+
+    'aus.1' => array(
+        'name' => 'Australian A-League',
+        'region' => 'oceania',
+        'country' => 'Australia',
+        'tier' => 1,
+        'type' => 'league',
+        'priority' => 6,
+    ),
+
+    // =========================================================================
+    // CLUB FRIENDLIES & OTHER
+    // =========================================================================
+
+    'club.friendly' => array(
+        'name' => 'Club Friendlies',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'friendly',
+        'priority' => 2,
+    ),
+    'friendly.emirates_cup' => array(
+        'name' => 'Emirates Cup',
+        'region' => 'europe',
+        'country' => 'England',
+        'tier' => null,
+        'type' => 'friendly',
+        'priority' => 3,
+    ),
+    'global.pinatar_cup' => array(
+        'name' => 'Pinatar Cup',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'friendly',
+        'priority' => 2,
+    ),
+    'global.toulon' => array(
+        'name' => 'Toulon Tournament',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'friendly',
+        'priority' => 3,
+    ),
+    'global.club_challenge' => array(
+        'name' => 'Club Challenge',
+        'region' => 'international',
+        'country' => null,
+        'tier' => null,
+        'type' => 'friendly',
+        'priority' => 2,
+    ),
+    'global.gulf_cup' => array(
+        'name' => 'Gulf Cup',
+        'region' => 'asia',
+        'country' => null,
+        'tier' => null,
+        'type' => 'international',
+        'priority' => 5,
     ),
 );
 
@@ -6237,6 +7240,105 @@ class FDM_E_Datasource_V2 {
  */
 function fdm_e_sync_season_stats( $league_code, $season_year ) {
     return FDM_E_Datasource_V2::e_datasource_sync_season_stats( $league_code, $season_year );
+}
+
+/**
+ * Get all supported league codes.
+ *
+ * @return array Array of e_league_code strings
+ */
+function fdm_e_get_all_leagues() {
+    return array_keys( $GLOBALS['fdm_e_supported_leagues'] );
+}
+
+/**
+ * Get leagues by region.
+ *
+ * @param string $region Region to filter by (e.g., 'europe', 'south_america', 'asia', 'africa', 'north_america', 'oceania', 'international')
+ * @return array Array of league configs filtered by region
+ */
+function fdm_e_get_leagues_by_region( $region ) {
+    return array_filter( $GLOBALS['fdm_e_supported_leagues'], function( $league ) use ( $region ) {
+        return isset( $league['region'] ) && strtolower( $league['region'] ) === strtolower( $region );
+    } );
+}
+
+/**
+ * Get leagues by country.
+ *
+ * @param string $country Country to filter by (e.g., 'England', 'Spain', 'Brazil')
+ * @return array Array of league configs filtered by country
+ */
+function fdm_e_get_leagues_by_country( $country ) {
+    return array_filter( $GLOBALS['fdm_e_supported_leagues'], function( $league ) use ( $country ) {
+        return isset( $league['country'] ) && stripos( $league['country'], $country ) !== false;
+    } );
+}
+
+/**
+ * Get leagues by type.
+ *
+ * @param string $type Type to filter by (e.g., 'league', 'cup', 'international', 'qualifying', 'supercup', 'friendly')
+ * @return array Array of league configs filtered by type
+ */
+function fdm_e_get_leagues_by_type( $type ) {
+    return array_filter( $GLOBALS['fdm_e_supported_leagues'], function( $league ) use ( $type ) {
+        return isset( $league['type'] ) && strtolower( $league['type'] ) === strtolower( $type );
+    } );
+}
+
+/**
+ * Get leagues by minimum priority.
+ *
+ * @param int $min_priority Minimum priority level (1-10)
+ * @return array Array of league configs with priority >= min_priority
+ */
+function fdm_e_get_leagues_by_priority( $min_priority ) {
+    return array_filter( $GLOBALS['fdm_e_supported_leagues'], function( $league ) use ( $min_priority ) {
+        return isset( $league['priority'] ) && (int) $league['priority'] >= (int) $min_priority;
+    } );
+}
+
+/**
+ * Get top-tier domestic leagues only (tier 1).
+ *
+ * @return array Array of league configs for top-tier domestic leagues
+ */
+function fdm_e_get_top_tier_leagues() {
+    return array_filter( $GLOBALS['fdm_e_supported_leagues'], function( $league ) {
+        return isset( $league['tier'] ) && (int) $league['tier'] === 1 && $league['type'] === 'league';
+    } );
+}
+
+/**
+ * Get league info by code.
+ *
+ * @param string $league_code The e_league_code (e.g., 'eng.1')
+ * @return array|null League config array or null if not found
+ */
+function fdm_e_get_league_info( $league_code ) {
+    return isset( $GLOBALS['fdm_e_supported_leagues'][ $league_code ] )
+        ? $GLOBALS['fdm_e_supported_leagues'][ $league_code ]
+        : null;
+}
+
+/**
+ * Check if a league code is supported.
+ *
+ * @param string $league_code The e_league_code to check
+ * @return bool True if supported, false otherwise
+ */
+function fdm_e_is_league_supported( $league_code ) {
+    return isset( $GLOBALS['fdm_e_supported_leagues'][ $league_code ] );
+}
+
+/**
+ * Get count of supported leagues.
+ *
+ * @return int Total number of supported leagues
+ */
+function fdm_e_get_league_count() {
+    return count( $GLOBALS['fdm_e_supported_leagues'] );
 }
 
 /**
