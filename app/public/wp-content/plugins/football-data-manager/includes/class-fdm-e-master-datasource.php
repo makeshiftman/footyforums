@@ -130,8 +130,8 @@ class FDM_E_Master_Datasource {
      * COMPREHENSIVE: Iterates ALL season types (not just type_id=1)
      * to capture cups, playoffs, and all competition phases.
      */
-    public function scrape_season( $league_code, $season, $mode = 'full' ) {
-        error_log( "FDM_E_Master_Datasource: Initiating Backfill for [{$league_code}] [{$season}] (Mode: {$mode})..." );
+    public function scrape_season( $league_code, $season, $mode = 'full', $force = false ) {
+        error_log( "FDM_E_Master_Datasource: Initiating Backfill for [{$league_code}] [{$season}] (Mode: {$mode}, Force: " . ($force ? 'yes' : 'no') . ")..." );
 
         // Audit counters
         $audit = [
@@ -147,6 +147,19 @@ class FDM_E_Master_Datasource {
             'platinum_stats' => 0,
             'season_types_found' => 0
         ];
+
+        // Skip entire season if we already have fixtures (unless --force is set)
+        if ( ! $force ) {
+            $existing = $this->get_season_completion_status( $league_code, $season );
+            if ( $existing['fixtures'] > 0 ) {
+                // We have fixtures - skip entirely (deep data was attempted in previous run)
+                $audit['season_skipped'] = true;
+                $audit['fixtures_found'] = $existing['fixtures'];
+                $audit['deep_skipped'] = $existing['with_deep_data'];
+                error_log( "FDM_E_Master_Datasource: SKIPPING [{$league_code}] [{$season}] - already have {$existing['fixtures']} fixtures with {$existing['with_deep_data']} deep data" );
+                return $audit;
+            }
+        }
 
         // 1. First, discover ALL season types for this league/season
         $season_types = $this->get_season_types( $league_code, $season );
@@ -307,6 +320,14 @@ class FDM_E_Master_Datasource {
      */
     private function process_deep_data( $league_code, $match_id, $season, $season_type, &$audit, $store_season = null ) {
         if ( $store_season === null ) $store_season = $season;
+
+        // Skip if we already have deep data for this match
+        if ( $this->has_deep_data( $match_id ) ) {
+            if ( ! isset( $audit['deep_skipped'] ) ) $audit['deep_skipped'] = 0;
+            $audit['deep_skipped']++;
+            return;
+        }
+
         $audit['deep_attempts']++;
 
         // Using site.summary.league (CANON)
@@ -375,6 +396,99 @@ class FDM_E_Master_Datasource {
         }
         $body = wp_remote_retrieve_body( $response );
         return json_decode( $body, true );
+    }
+
+    /**
+     * Check if we already have complete data for a league/season
+     * Returns counts of fixtures and how many have deep data
+     *
+     * @param string $league_code ESPN league code
+     * @param int $season Season year
+     * @return array ['fixtures' => int, 'with_deep_data' => int]
+     */
+    private function get_season_completion_status( $league_code, $season ) {
+        if ( ! $this->db ) {
+            return ['fixtures' => 0, 'with_deep_data' => 0];
+        }
+
+        // Count fixtures for this league/season
+        $fixtures_count = 0;
+        $stmt = $this->db->prepare( "SELECT COUNT(*) as cnt FROM fixtures WHERE league_code = ? AND season_year = ?" );
+        if ( $stmt ) {
+            $stmt->bind_param( "si", $league_code, $season );
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result->fetch_assoc();
+            $fixtures_count = $row ? (int) $row['cnt'] : 0;
+            $stmt->close();
+        }
+
+        if ( $fixtures_count === 0 ) {
+            return ['fixtures' => 0, 'with_deep_data' => 0];
+        }
+
+        // Count how many have deep data (lineups or plays)
+        $deep_count = 0;
+        $stmt2 = $this->db->prepare( "
+            SELECT COUNT(DISTINCT f.eventid) as cnt
+            FROM fixtures f
+            LEFT JOIN lineups l ON f.eventid = l.eventid
+            LEFT JOIN plays p ON f.eventid = p.eventid
+            WHERE f.league_code = ? AND f.season_year = ?
+            AND (l.eventid IS NOT NULL OR p.eventid IS NOT NULL)
+        " );
+        if ( $stmt2 ) {
+            $stmt2->bind_param( "si", $league_code, $season );
+            $stmt2->execute();
+            $result2 = $stmt2->get_result();
+            $row2 = $result2->fetch_assoc();
+            $deep_count = $row2 ? (int) $row2['cnt'] : 0;
+            $stmt2->close();
+        }
+
+        return ['fixtures' => $fixtures_count, 'with_deep_data' => $deep_count];
+    }
+
+    /**
+     * Check if we already have deep data for a match
+     * Uses lineups as the indicator - if we have lineups, we have deep data
+     * Also checks plays as a secondary indicator for matches where lineups may not exist
+     *
+     * @param int $match_id The ESPN event ID
+     * @return bool True if deep data already exists
+     */
+    private function has_deep_data( $match_id ) {
+        if ( ! $this->db ) return false;
+
+        // Check for lineups first (most common deep data)
+        $stmt = $this->db->prepare( "SELECT 1 FROM lineups WHERE eventid = ? LIMIT 1" );
+        if ( $stmt ) {
+            $stmt->bind_param( "i", $match_id );
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $has_lineups = $result->fetch_assoc() !== null;
+            $stmt->close();
+
+            if ( $has_lineups ) {
+                return true;
+            }
+        }
+
+        // Also check plays as backup (some matches have plays but no lineups)
+        $stmt2 = $this->db->prepare( "SELECT 1 FROM plays WHERE eventid = ? LIMIT 1" );
+        if ( $stmt2 ) {
+            $stmt2->bind_param( "i", $match_id );
+            $stmt2->execute();
+            $result2 = $stmt2->get_result();
+            $has_plays = $result2->fetch_assoc() !== null;
+            $stmt2->close();
+
+            if ( $has_plays ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -661,31 +775,78 @@ class FDM_E_Master_Datasource {
         if ( empty( $rosters ) || ! $this->db ) return 0;
 
         // Delete existing player stats for this match to avoid duplicates
-        $del_stmt = $this->db->prepare("DELETE FROM playerStats WHERE season = ? AND seasontype = ? AND league = ? AND eventid = ?");
+        $del_stmt = $this->db->prepare("DELETE FROM playerStats WHERE eventid = ?");
         if ($del_stmt) {
-            $year_str = (string)$season;
-            // Note: playerStats doesn't have eventid column, so we use a different approach
-            // Actually, looking at the schema again, it doesn't have eventid - these are cumulative stats
-            // So we should not delete, we should update/accumulate
+            $del_stmt->bind_param("i", $match_id);
+            $del_stmt->execute();
+            $del_stmt->close();
         }
 
-        // Actually, playerStats schema shows cumulative season stats, not per-match
-        // The per-match stats come from rosters[].roster[].stats but go into a cumulative table
-        // We need to handle this differently - for now, let's just count what we found
-        // A more sophisticated approach would aggregate these per season
+        $sql = "INSERT INTO playerStats (
+            season, seasontype, year, league, teamid, athleteid, eventid,
+            appearances_value, subins_value, foulscommitted_value, foulssuffered_value,
+            yellowcards_value, redcards_value, owngoals_value, goalassists_value,
+            offsides_value, shotsontarget_value, totalshots_value, totalgoals_value,
+            shotsfaced_value, saves_value, goalsconceded_value, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+
+        $stmt = $this->db->prepare($sql);
+        if ( ! $stmt ) return 0;
 
         $count = 0;
+        $year_str = (string) $season;
+        $league_str = $league_code;
 
         foreach ( $rosters as $team_roster ) {
             $team_id = isset( $team_roster['team']['id'] ) ? (int) $team_roster['team']['id'] : 0;
             if ( empty( $team_roster['roster'] ) ) continue;
 
             foreach ( $team_roster['roster'] as $player ) {
-                if ( empty( $player['stats'] ) ) continue;
-                $count++;
+                $athlete_id = isset( $player['athlete']['id'] ) ? (int) $player['athlete']['id'] : 0;
+                if ( ! $athlete_id ) continue;
+
+                // Build stats map
+                $stats = [];
+                if ( ! empty( $player['stats'] ) ) {
+                    foreach ( $player['stats'] as $stat ) {
+                        $name = isset( $stat['name'] ) ? $stat['name'] : '';
+                        $stats[$name] = isset( $stat['value'] ) ? (int) $stat['value'] : 0;
+                    }
+                }
+
+                // Extract all stats with defaults
+                $appearances = isset($stats['appearances']) ? $stats['appearances'] : 0;
+                $subins = isset($stats['subIns']) ? $stats['subIns'] : 0;
+                $fouls_committed = isset($stats['foulsCommitted']) ? $stats['foulsCommitted'] : 0;
+                $fouls_suffered = isset($stats['foulsSuffered']) ? $stats['foulsSuffered'] : 0;
+                $yellow_cards = isset($stats['yellowCards']) ? $stats['yellowCards'] : 0;
+                $red_cards = isset($stats['redCards']) ? $stats['redCards'] : 0;
+                $own_goals = isset($stats['ownGoals']) ? $stats['ownGoals'] : 0;
+                $goal_assists = isset($stats['goalAssists']) ? $stats['goalAssists'] : 0;
+                $offsides = isset($stats['offsides']) ? $stats['offsides'] : 0;
+                $shots_on_target = isset($stats['shotsOnTarget']) ? $stats['shotsOnTarget'] : 0;
+                $total_shots = isset($stats['totalShots']) ? $stats['totalShots'] : 0;
+                $total_goals = isset($stats['totalGoals']) ? $stats['totalGoals'] : 0;
+                $shots_faced = isset($stats['shotsFaced']) ? $stats['shotsFaced'] : 0;
+                $saves = isset($stats['saves']) ? $stats['saves'] : 0;
+                $goals_conceded = isset($stats['goalsConceded']) ? $stats['goalsConceded'] : 0;
+
+                $stmt->bind_param(
+                    "iissiiiiiiiiiiiiiiiiii",
+                    $season, $season_type, $year_str, $league_str, $team_id, $athlete_id, $match_id,
+                    $appearances, $subins, $fouls_committed, $fouls_suffered,
+                    $yellow_cards, $red_cards, $own_goals, $goal_assists,
+                    $offsides, $shots_on_target, $total_shots, $total_goals,
+                    $shots_faced, $saves, $goals_conceded
+                );
+
+                if ($stmt->execute()) {
+                    $count++;
+                }
             }
         }
 
+        $stmt->close();
         return $count;
     }
 
@@ -694,30 +855,17 @@ class FDM_E_Master_Datasource {
      */
     private function fetch_transfers( $league_code, $season ) {
         $url = "https://site.api.espn.com/apis/site/v2/sports/soccer/{$league_code}/transactions?season={$season}";
-        
+
         $response = wp_remote_get( $url, ['timeout' => 15, 'sslverify' => false] );
         if ( is_wp_error( $response ) ) return false;
-        
+
         $body = wp_remote_retrieve_body( $response );
         $data = json_decode( $body, true );
-        
+
         if ( empty( $data['transactions'] ) ) return false;
 
         $count = 0;
-        foreach ( $data['transactions'] as $group ) {
-            // structure can be grouped by date, or flat list. 
-            // The probe showed 'transactions' -> array of groups? Or items?
-            // The user provided logic assumes $data['transactions'] as the list of items?
-            // Wait, looking at the probe output: $data['transactions'] was an array of objects.
-            // Probe output sample keys: [date, status, athlete, from, to, type, displayAmount]
-            // So $t is the item.
-            
-            // However, typically ESPN API returns grouped transactions. 
-            // Let's stick strictly to the user's provided logic snippet but wrapped in the class structure.
-            // User provided: foreach ($data['transactions'] as $t) { ... }
-            
-            $t = $group; // Assuming flat list based on User's request logic
-            
+        foreach ( $data['transactions'] as $t ) {
             // Safe extraction with fallbacks
             $date = isset($t['date']) ? date('Y-m-d', strtotime($t['date'])) : null;
             $player_id = isset($t['athlete']['id']) ? $t['athlete']['id'] : 0;
@@ -726,20 +874,21 @@ class FDM_E_Master_Datasource {
             $from_name = isset($t['from']['displayName']) ? $t['from']['displayName'] : '';
             $to_id = isset($t['to']['id']) ? $t['to']['id'] : 0;
             $to_name = isset($t['to']['displayName']) ? $t['to']['displayName'] : '';
-            $fee = isset($t['displayAmount']) ? $t['displayAmount'] : ''; 
+            $fee = isset($t['displayAmount']) ? $t['displayAmount'] : '';
             $type = isset($t['type']) ? $t['type'] : 'Transfer';
 
             if ( $this->db ) {
                 $stmt = $this->db->prepare(
-                    "REPLACE INTO transfers 
-                    (season, date, player_id, player_name, from_team_id, from_team_name, to_team_id, to_team_name, fee, type) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    "REPLACE INTO transfers
+                    (season, league, date, player_id, player_name, from_team_id, from_team_name, to_team_id, to_team_name, fee, type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 );
                 if ($stmt) {
-                    $stmt->bind_param( "isisisssss", 
-                        $season, $date, $player_id, $player_name, $from_id, $from_name, $to_id, $to_name, $fee, $type 
+                    $stmt->bind_param( "issisisssss",
+                        $season, $league_code, $date, $player_id, $player_name, $from_id, $from_name, $to_id, $to_name, $fee, $type
                     );
                     $stmt->execute();
+                    $stmt->close();
                     $count++;
                 }
             }
@@ -1196,7 +1345,7 @@ class FDM_E_Master_Datasource {
                     WHERE season = ? AND athleteid = ?
                 ");
                 if ( $stmt ) {
-                    $stmt->bind_param( "sssssssdsddsdssdssii",
+                    $stmt->bind_param( "sssssssdsddsdssdsssii",
                         $firstname, $lastname, $fullname, $displayname, $shortname,
                         $slug, $displayweight, $weight, $displayheight, $height, $age, $dateofbirth,
                         $jersey, $citizenship, $positionname, $positionid, $positionabbr,

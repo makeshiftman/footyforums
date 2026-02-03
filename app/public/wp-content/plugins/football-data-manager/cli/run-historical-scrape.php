@@ -23,7 +23,10 @@ if ( php_sapi_name() !== 'cli' ) {
 }
 
 // Parse command line options
-$options = getopt( '', [ 'year::', 'years::', 'league::', 'leagues::', 'mode::', 'help' ] );
+$options = getopt( '', [ 'year::', 'years::', 'league::', 'leagues::', 'mode::', 'force', 'help' ] );
+
+// Force mode - re-scrape even if data exists
+$force_rescrape = isset( $options['force'] );
 
 // Show help if requested
 if ( isset( $options['help'] ) ) {
@@ -43,6 +46,7 @@ Options:
   --league=CODE         Scrape single league (e.g., --league=eng.1)
   --leagues=CODE,CODE   Scrape multiple leagues (comma-separated)
   --mode=MODE           Scrape mode: full, deep_only, fixtures_only (default: full)
+  --force               Re-scrape even if data exists (ignore skip logic)
   --help                Show this help message
 
 Examples:
@@ -208,19 +212,34 @@ foreach ( $all_years as $year ) {
 
         try {
             // Call the scraper
-            $result = $datasource->scrape_season( $league_code, $year, $mode );
+            $result = $datasource->scrape_season( $league_code, $year, $mode, $force_rescrape );
 
             if ( $result && is_array( $result ) ) {
-                $fixtures_count = isset( $result['fixtures_found'] ) ? $result['fixtures_found'] : 0;
-                $deep_count = isset( $result['lineups_found'] ) ? $result['lineups_found'] : 0;
-
-                $total_fixtures += $fixtures_count;
-                $year_fixtures += $fixtures_count;
-
-                if ( $fixtures_count > 0 ) {
-                    echo "OK ($fixtures_count fixtures, $deep_count deep)\n";
+                // Check for season-level skip (instant, no API calls)
+                if ( ! empty( $result['season_skipped'] ) ) {
+                    $fixtures_count = isset( $result['fixtures_found'] ) ? $result['fixtures_found'] : 0;
+                    $deep_count = isset( $result['deep_skipped'] ) ? $result['deep_skipped'] : 0;
+                    echo "SKIP ($fixtures_count fixtures, $deep_count with deep data)\n";
+                    // Don't add to totals - already counted in previous run
                 } else {
-                    echo "OK (no fixtures)\n";
+                    $fixtures_count = isset( $result['fixtures_found'] ) ? $result['fixtures_found'] : 0;
+                    $deep_count = isset( $result['lineups_found'] ) ? $result['lineups_found'] : 0;
+                    $skipped_count = isset( $result['deep_skipped'] ) ? $result['deep_skipped'] : 0;
+
+                    $total_fixtures += $fixtures_count;
+                    $year_fixtures += $fixtures_count;
+
+                    if ( $fixtures_count > 0 ) {
+                        if ( $skipped_count > 0 && $skipped_count == $fixtures_count ) {
+                            echo "SKIP (all $fixtures_count already have deep data)\n";
+                        } elseif ( $skipped_count > 0 ) {
+                            echo "OK ($fixtures_count fixtures, $deep_count new deep, $skipped_count skipped)\n";
+                        } else {
+                            echo "OK ($fixtures_count fixtures, $deep_count deep)\n";
+                        }
+                    } else {
+                        echo "OK (no fixtures)\n";
+                    }
                 }
             } else {
                 echo "OK (empty result)\n";

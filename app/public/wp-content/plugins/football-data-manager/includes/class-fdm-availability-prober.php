@@ -34,6 +34,20 @@ class FDM_Availability_Prober {
     private $rate_limit_delay = 200000;
 
     /**
+     * Manual verification handler
+     *
+     * @var FDM_Manual_Verification|null
+     */
+    private $verification;
+
+    /**
+     * Current league name being processed (for verification logging)
+     *
+     * @var string
+     */
+    private $current_league_name = '';
+
+    /**
      * Patterns to filter out women's leagues
      *
      * @var array
@@ -66,6 +80,14 @@ class FDM_Availability_Prober {
      */
     public function __construct() {
         $this->e_db = $this->connect_db();
+
+        // Initialize manual verification handler
+        $verification_path = dirname( __FILE__ ) . '/class-fdm-manual-verification.php';
+        if ( file_exists( $verification_path ) ) {
+            require_once $verification_path;
+            $this->verification = new FDM_Manual_Verification();
+            $this->verification->create_table();
+        }
     }
 
     /**
@@ -110,6 +132,11 @@ class FDM_Availability_Prober {
     }
 
     /**
+     * Progress file path for admin UI tracking
+     */
+    const PROGRESS_FILE = '/tmp/probe-progress.json';
+
+    /**
      * Run full availability probe for all leagues and years
      */
     public function run() {
@@ -118,6 +145,13 @@ class FDM_Availability_Prober {
             return;
         }
 
+        // Clear log file at start of new run
+        $log_file = '/tmp/probe-availability.log';
+        file_put_contents( $log_file, '' );
+
+        // Initialize progress tracking
+        $this->update_progress( 0, 0, 'starting' );
+
         $this->log( "Starting ESPN availability probe..." );
 
         // Fetch all leagues from ESPN
@@ -125,6 +159,7 @@ class FDM_Availability_Prober {
 
         if ( empty( $this->leagues ) ) {
             $this->log( "No leagues found - aborting", 'error' );
+            $this->update_progress( 0, 0, 'error' );
             return;
         }
 
@@ -133,7 +168,25 @@ class FDM_Availability_Prober {
         // Probe each league for years 2001-2025
         $this->probe_all_leagues();
 
+        $this->update_progress( count( $this->leagues ), count( $this->leagues ), 'complete' );
         $this->log( "ESPN availability probe complete!" );
+    }
+
+    /**
+     * Update progress file for admin UI tracking
+     *
+     * @param int    $current Current league index
+     * @param int    $total   Total leagues to probe
+     * @param string $status  Status: starting, running, complete, error
+     */
+    private function update_progress( $current, $total, $status = 'running' ) {
+        $data = [
+            'current'    => $current,
+            'total'      => $total,
+            'status'     => $status,
+            'updated_at' => time(),
+        ];
+        file_put_contents( self::PROGRESS_FILE, json_encode( $data ), LOCK_EX );
     }
 
     /**
@@ -183,8 +236,18 @@ class FDM_Availability_Prober {
 
         $total = count( $response['items'] );
         $filtered = 0;
+        $processed = 0;
+
+        $this->log( sprintf( "Found %d league references, dereferencing...", $total ) );
 
         foreach ( $response['items'] as $item ) {
+            $processed++;
+
+            // Log progress every 25 leagues
+            if ( $processed % 25 === 0 ) {
+                $this->log( sprintf( "  Fetching league info: %d/%d", $processed, $total ) );
+            }
+
             // Dereference league info
             if ( ! isset( $item['$ref'] ) ) {
                 continue;
@@ -249,6 +312,9 @@ class FDM_Availability_Prober {
         $probed = 0;
 
         foreach ( $this->leagues as $index => $league ) {
+            // Update progress for admin UI
+            $this->update_progress( $index, $total_leagues, 'running' );
+
             $this->log( sprintf(
                 "\n[%d/%d] Probing %s (%s)",
                 $index + 1,
@@ -256,6 +322,9 @@ class FDM_Availability_Prober {
                 $league['name'],
                 $league['code']
             ) );
+
+            // Store current league name for verification logging
+            $this->current_league_name = $league['name'];
 
             for ( $year = $start_year; $year <= $end_year; $year++ ) {
                 $probed++;
@@ -268,6 +337,10 @@ class FDM_Availability_Prober {
 
                 if ( $availability && $availability['fixtures_available'] > 0 ) {
                     $this->save_availability( $availability );
+
+                    // Log missing data types for manual verification
+                    $this->log_missing_for_verification( $league['code'], $league['name'], $year, $availability );
+
                     $this->log( sprintf(
                         "  %d: %d fixtures",
                         $year,
@@ -336,6 +409,21 @@ class FDM_Availability_Prober {
         // Actually probe sample matches to determine deep data availability
         $availability = $this->probe_deep_data_availability( $league_code, $sample_event_ids );
 
+        // Probe teams for this league
+        $teams_count = $this->probe_teams( $league_code );
+
+        // Probe standings for this league/year
+        $standings_available = $this->probe_standings( $league_code, $year );
+
+        // Probe players (estimate from roster data)
+        $players_count = $this->probe_players( $league_code, $year );
+
+        // Probe transfers
+        $transfers_count = $this->probe_transfers( $league_code, $year );
+
+        // Probe season stats (leaders endpoint)
+        $season_stats_available = $this->probe_season_stats( $league_code, $year );
+
         return [
             'league_code'            => $league_code,
             'season_year'            => $year,
@@ -346,7 +434,14 @@ class FDM_Availability_Prober {
             'team_stats_available'   => $availability['team_stats'] ? 1 : 0,
             'player_stats_available' => $availability['player_stats'] ? 1 : 0,
             'plays_available'        => $availability['plays'] ? 1 : 0,
-            'roster_available'       => $availability['lineups'] ? 1 : 0, // Same as lineups
+            'roster_available'       => $availability['lineups'] ? 1 : 0,
+            'teams_available'        => $teams_count,
+            'players_available'      => $players_count,
+            'standings_available'    => $standings_available ? 1 : 0,
+            'transfers_available'    => $transfers_count,
+            'season_stats_available' => $season_stats_available ? 1 : 0,
+            'venues_available'       => $availability['venues'] ? 1 : 0,
+            'sample_event_id'        => ! empty( $sample_event_ids ) ? $sample_event_ids[0] : null,
         ];
     }
 
@@ -365,6 +460,7 @@ class FDM_Availability_Prober {
             'team_stats'   => false,
             'player_stats' => false,
             'plays'        => false,
+            'venues'       => false,
         ];
 
         if ( empty( $event_ids ) ) {
@@ -385,12 +481,15 @@ class FDM_Availability_Prober {
             $checked++;
 
             // Check each data type
+            // Note: rosters array may exist with just team info but no actual player lineups
+            // We must check for actual player data in the roster sub-array
             if ( ! empty( $summary['rosters'] ) ) {
-                $availability['lineups'] = true;
-
-                // Check for player stats within rosters
                 foreach ( $summary['rosters'] as $team_roster ) {
-                    if ( ! empty( $team_roster['roster'] ) ) {
+                    // Only set lineups=true if there's actual player data
+                    if ( ! empty( $team_roster['roster'] ) && is_array( $team_roster['roster'] ) ) {
+                        $availability['lineups'] = true;
+
+                        // Check for player stats within rosters
                         foreach ( $team_roster['roster'] as $player ) {
                             if ( ! empty( $player['stats'] ) ) {
                                 $availability['player_stats'] = true;
@@ -418,9 +517,27 @@ class FDM_Availability_Prober {
                 }
             }
 
+            // Check plays endpoint for this match
+            if ( ! $availability['plays'] ) {
+                $plays_url = "https://sports.core.api.espn.com/v2/sports/soccer/leagues/{$league_code}/events/{$event_id}/competitions/{$event_id}/plays?limit=1";
+                $plays_response = $this->fetch_json( $plays_url );
+                if ( $plays_response && ! empty( $plays_response['items'] ) ) {
+                    $availability['plays'] = true;
+                }
+                usleep( $this->rate_limit_delay );
+            }
+
+            // Check for venue data in the summary
+            if ( ! $availability['venues'] ) {
+                if ( ! empty( $summary['gameInfo']['venue']['id'] ) ) {
+                    $availability['venues'] = true;
+                }
+            }
+
             // If we found all data types, no need to check more matches
             if ( $availability['lineups'] && $availability['commentary'] &&
-                 $availability['key_events'] && $availability['team_stats'] ) {
+                 $availability['key_events'] && $availability['team_stats'] &&
+                 $availability['plays'] && $availability['venues'] ) {
                 break;
             }
 
@@ -428,6 +545,112 @@ class FDM_Availability_Prober {
         }
 
         return $availability;
+    }
+
+    /**
+     * Probe teams endpoint for a league
+     *
+     * @param string $league_code ESPN league code
+     * @return int Number of teams found
+     */
+    private function probe_teams( $league_code ) {
+        $teams_url = "https://sports.core.api.espn.com/v2/sports/soccer/leagues/{$league_code}/teams?limit=100";
+        $response = $this->fetch_json( $teams_url );
+        usleep( $this->rate_limit_delay );
+
+        if ( $response && isset( $response['count'] ) ) {
+            return (int) $response['count'];
+        }
+
+        return 0;
+    }
+
+    /**
+     * Probe standings endpoint for a league/year
+     *
+     * @param string $league_code ESPN league code
+     * @param int    $year        Season year
+     * @return bool Whether standings are available
+     */
+    private function probe_standings( $league_code, $year ) {
+        // Try common group IDs (1 is most common for league standings)
+        $standings_url = "https://sports.core.api.espn.com/v2/sports/soccer/leagues/{$league_code}/seasons/{$year}/types/1/groups/1/standings";
+        $response = $this->fetch_json( $standings_url );
+        usleep( $this->rate_limit_delay );
+
+        if ( $response && ! empty( $response['standings'] ) ) {
+            return true;
+        }
+
+        // Try without group specification
+        $standings_url2 = "https://site.api.espn.com/apis/v2/sports/soccer/{$league_code}/standings?season={$year}";
+        $response2 = $this->fetch_json( $standings_url2 );
+        usleep( $this->rate_limit_delay );
+
+        if ( $response2 && ! empty( $response2['children'] ) ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Probe players/roster data for a league/year
+     *
+     * @param string $league_code ESPN league code
+     * @param int    $year        Season year
+     * @return int Estimated player count (teams * ~25 players avg)
+     */
+    private function probe_players( $league_code, $year ) {
+        // Get team count and estimate players (avg 25 per team)
+        $teams_url = "https://sports.core.api.espn.com/v2/sports/soccer/leagues/{$league_code}/seasons/{$year}/teams?limit=100";
+        $response = $this->fetch_json( $teams_url );
+        usleep( $this->rate_limit_delay );
+
+        if ( $response && isset( $response['count'] ) ) {
+            // Estimate ~25 players per team roster
+            return (int) $response['count'] * 25;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Probe transfers endpoint for a league/year
+     *
+     * @param string $league_code ESPN league code
+     * @param int    $year        Season year
+     * @return int Number of transfers found
+     */
+    private function probe_transfers( $league_code, $year ) {
+        $url = "https://site.api.espn.com/apis/site/v2/sports/soccer/{$league_code}/transactions?season={$year}";
+        $response = $this->fetch_json( $url );
+        usleep( $this->rate_limit_delay );
+
+        if ( $response && ! empty( $response['transactions'] ) ) {
+            return count( $response['transactions'] );
+        }
+
+        return 0;
+    }
+
+    /**
+     * Probe season stats (leaders) endpoint for a league/year
+     *
+     * @param string $league_code ESPN league code
+     * @param int    $year        Season year
+     * @return bool Whether season stats are available
+     */
+    private function probe_season_stats( $league_code, $year ) {
+        $url = "https://sports.core.api.espn.com/v2/sports/soccer/leagues/{$league_code}/seasons/{$year}/types/1/leaders";
+        $response = $this->fetch_json( $url );
+        usleep( $this->rate_limit_delay );
+
+        if ( $response && ! empty( $response['categories'] ) ) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -444,8 +667,10 @@ class FDM_Availability_Prober {
             (league_code, season_year, fixtures_available, lineups_available,
              commentary_available, key_events_available, roster_available,
              team_stats_available, player_stats_available, plays_available,
+             teams_available, players_available, standings_available, transfers_available,
+             season_stats_available, venues_available,
              verified_at, verified_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'api_probe')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'api_probe')
             ON DUPLICATE KEY UPDATE
                 fixtures_available = VALUES(fixtures_available),
                 lineups_available = VALUES(lineups_available),
@@ -455,6 +680,12 @@ class FDM_Availability_Prober {
                 team_stats_available = VALUES(team_stats_available),
                 player_stats_available = VALUES(player_stats_available),
                 plays_available = VALUES(plays_available),
+                teams_available = VALUES(teams_available),
+                players_available = VALUES(players_available),
+                standings_available = VALUES(standings_available),
+                transfers_available = VALUES(transfers_available),
+                season_stats_available = VALUES(season_stats_available),
+                venues_available = VALUES(venues_available),
                 verified_at = NOW(),
                 verified_method = 'api_probe'";
 
@@ -466,7 +697,7 @@ class FDM_Availability_Prober {
         }
 
         $stmt->bind_param(
-            'siiiiiiiii',
+            'siiiiiiiiiiiiiii',
             $data['league_code'],
             $data['season_year'],
             $data['fixtures_available'],
@@ -476,7 +707,13 @@ class FDM_Availability_Prober {
             $data['roster_available'],
             $data['team_stats_available'],
             $data['player_stats_available'],
-            $data['plays_available']
+            $data['plays_available'],
+            $data['teams_available'],
+            $data['players_available'],
+            $data['standings_available'],
+            $data['transfers_available'],
+            $data['season_stats_available'],
+            $data['venues_available']
         );
 
         if ( ! $stmt->execute() ) {
@@ -484,6 +721,85 @@ class FDM_Availability_Prober {
         }
 
         $stmt->close();
+    }
+
+    /**
+     * Log missing data types for manual verification
+     *
+     * @param string $league_code ESPN league code
+     * @param string $league_name Human-readable league name
+     * @param int    $year        Season year
+     * @param array  $availability Availability data from probe
+     */
+    private function log_missing_for_verification( $league_code, $league_name, $year, $availability ) {
+        if ( ! $this->verification ) {
+            return;
+        }
+
+        // Only log if there are fixtures but missing data types
+        if ( $availability['fixtures_available'] <= 0 ) {
+            return;
+        }
+
+        // Get sample event ID for match-level URLs
+        $event_id = isset( $availability['sample_event_id'] ) ? $availability['sample_event_id'] : 'NO_EVENT_ID';
+
+        // Check each data type and log URLs for missing ones
+        $data_type_urls = [
+            'plays' => [
+                'check' => 'plays_available',
+                'url' => "https://sports.core.api.espn.com/v2/sports/soccer/leagues/{$league_code}/events/{$event_id}/competitions/{$event_id}/plays",
+            ],
+            'teams' => [
+                'check' => 'teams_available',
+                'url' => "https://sports.core.api.espn.com/v2/sports/soccer/leagues/{$league_code}/teams?limit=100",
+            ],
+            'standings' => [
+                'check' => 'standings_available',
+                'url' => "https://site.api.espn.com/apis/v2/sports/soccer/{$league_code}/standings?season={$year}",
+            ],
+            'lineups' => [
+                'check' => 'lineups_available',
+                'url' => "https://site.api.espn.com/apis/site/v2/sports/soccer/{$league_code}/summary?event={$event_id}",
+            ],
+            'commentary' => [
+                'check' => 'commentary_available',
+                'url' => "https://site.api.espn.com/apis/site/v2/sports/soccer/{$league_code}/summary?event={$event_id}",
+            ],
+            'key_events' => [
+                'check' => 'key_events_available',
+                'url' => "https://site.api.espn.com/apis/site/v2/sports/soccer/{$league_code}/summary?event={$event_id}",
+            ],
+            'team_stats' => [
+                'check' => 'team_stats_available',
+                'url' => "https://site.api.espn.com/apis/site/v2/sports/soccer/{$league_code}/summary?event={$event_id}",
+            ],
+            'player_stats' => [
+                'check' => 'player_stats_available',
+                'url' => "https://site.api.espn.com/apis/site/v2/sports/soccer/{$league_code}/summary?event={$event_id}",
+            ],
+            'transfers' => [
+                'check' => 'transfers_available',
+                'url' => "https://site.api.espn.com/apis/site/v2/sports/soccer/{$league_code}/transactions?season={$year}",
+            ],
+        ];
+
+        // ESPN website URL for match (if we have an event ID)
+        $site_url = $event_id !== 'NO_EVENT_ID' ? "https://www.espn.com/soccer/match/_/gameId/{$event_id}" : null;
+
+        foreach ( $data_type_urls as $data_type => $config ) {
+            $check_key = $config['check'];
+            if ( isset( $availability[ $check_key ] ) && ! $availability[ $check_key ] ) {
+                $this->verification->log_for_verification(
+                    $league_code,
+                    $league_name,
+                    $year,
+                    $data_type,
+                    $config['url'],
+                    $site_url
+                );
+            }
+        }
     }
 
     /**
@@ -536,17 +852,22 @@ class FDM_Availability_Prober {
     }
 
     /**
-     * Log message to CLI or error log
+     * Log message to CLI, error log, and progress file for admin UI tracking
      *
      * @param string $message Message to log
      * @param string $level   Log level (info, error, warning)
      */
     private function log( $message, $level = 'info' ) {
         $prefix = '[FDM Prober]';
+        $timestamp = date( 'Y-m-d H:i:s' );
+        $formatted = sprintf( "[%s] %s %s\n", $timestamp, $prefix, $message );
+
+        // Always write to progress file for admin UI tracking
+        $log_file = '/tmp/probe-availability.log';
+        file_put_contents( $log_file, $formatted, FILE_APPEND | LOCK_EX );
 
         if ( php_sapi_name() === 'cli' ) {
-            $timestamp = date( 'Y-m-d H:i:s' );
-            echo sprintf( "[%s] %s %s\n", $timestamp, $prefix, $message );
+            echo $formatted;
         } else {
             error_log( sprintf( "%s %s", $prefix, $message ) );
         }
