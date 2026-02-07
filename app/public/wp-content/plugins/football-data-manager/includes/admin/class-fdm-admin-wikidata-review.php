@@ -500,7 +500,6 @@ class FDM_Admin_Wikidata_Review {
         wp_redirect($redirect);
         exit;
     }
-}
 
     public function handle_manual() {
         if (!check_admin_referer('fdm_wikidata_action', 'fdm_nonce')) {
