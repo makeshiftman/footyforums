@@ -17,6 +17,8 @@ class FDM_Admin_Data_Status {
         add_action('wp_ajax_fdm_leagues_refresh', [$this, 'ajax_leagues_refresh']);
         add_action('wp_ajax_fdm_prober_progress', [$this, 'ajax_prober_progress']);
         add_action('wp_ajax_fdm_scraper_progress', [$this, 'ajax_scraper_progress']);
+        add_action('wp_ajax_fdm_league_detail', [$this, 'ajax_league_detail']);
+        add_action('wp_ajax_fdm_update_verification_status', [$this, 'ajax_update_verification_status']);
     }
 
     /**
@@ -59,6 +61,8 @@ class FDM_Admin_Data_Status {
 
             if ($tab === 'by-league') {
                 $this->render_leagues_view();
+            } elseif ($tab === 'verification') {
+                $this->render_verification_tab();
             } else {
                 $this->render_main_view();
             }
@@ -71,33 +75,72 @@ class FDM_Admin_Data_Status {
      * Get prober progress data
      */
     private function get_prober_progress() {
-        $e_db = $this->get_e_db();
-
-        $probed_count = intval($e_db->get_var("SELECT COUNT(DISTINCT league_code) FROM espn_availability"));
-
-        // Use probed count as total once prober has run, otherwise estimate 220
-        // (ESPN has ~216-224 leagues, prober discovers the actual count)
-        $total_leagues = $probed_count > 0 ? $probed_count : 220;
-
-        $percentage = $total_leagues > 0 ? round(($probed_count / $total_leagues) * 100, 1) : 0;
-        $is_complete = $probed_count >= $total_leagues;
-
-        // Check if prober is running (log modified in last 60 seconds)
-        $prober_running = false;
+        $progress_file = '/tmp/probe-progress.json';
         $log_file = '/tmp/probe-availability.log';
+
+        // Default values
+        $current = 0;
+        $total = 0;
+        $status = 'idle';
+        $is_running = false;
+
+        // First check if log file was recently modified (prober writes to it frequently)
         if (file_exists($log_file)) {
             $mtime = filemtime($log_file);
-            if ($mtime && (time() - $mtime) < 60) {
-                $prober_running = true;
+            clearstatcache(true, $log_file);
+            if ($mtime && (time() - $mtime) < 120) {
+                $is_running = true;
             }
         }
 
+        // Read progress from JSON file written by prober
+        if (file_exists($progress_file)) {
+            $data = json_decode(file_get_contents($progress_file), true);
+            if ($data) {
+                $current = intval($data['current'] ?? 0);
+                $total = intval($data['total'] ?? 0);
+                $status = $data['status'] ?? 'idle';
+
+                // If status is complete/error, respect that even if log file is recent
+                if (in_array($status, ['complete', 'error'])) {
+                    $is_running = false;
+                }
+            }
+        }
+
+        // If prober is running but we have progress data, use it
+        // If prober is running but no progress yet (starting phase), show that
+        if ($is_running && $total === 0) {
+            // Still in startup phase - show as running with unknown total
+            return [
+                'probed' => 0,
+                'total' => 224, // Estimate
+                'percentage' => 0,
+                'is_complete' => false,
+                'is_running' => true
+            ];
+        }
+
+        // If not running and no progress file data, check DB for completed state
+        if (!$is_running && $total === 0) {
+            $e_db = $this->get_e_db();
+            $probed_count = intval($e_db->get_var("SELECT COUNT(DISTINCT league_code) FROM espn_availability"));
+            if ($probed_count > 0) {
+                $current = $probed_count;
+                $total = $probed_count;
+                $status = 'complete';
+            }
+        }
+
+        $percentage = $total > 0 ? round(($current / $total) * 100, 1) : 0;
+        $is_complete = ($status === 'complete') || ($current >= $total && $total > 0 && !$is_running);
+
         return [
-            'probed' => $probed_count,
-            'total' => $total_leagues,
+            'probed' => $current,
+            'total' => $total,
             'percentage' => $percentage,
             'is_complete' => $is_complete,
-            'is_running' => $prober_running
+            'is_running' => $is_running
         ];
     }
 
@@ -212,16 +255,21 @@ class FDM_Admin_Data_Status {
      * Render tab navigation
      */
     private function render_tabs($active_tab) {
+        // Get pending verification count for badge
+        $verification_count = $this->get_verification_pending_count();
+
         $tabs = [
-            'by-year' => 'By Year',
-            'by-league' => 'By League',
+            'by-year' => ['label' => 'By Year', 'count' => 0],
+            'by-league' => ['label' => 'By League', 'count' => 0],
+            'verification' => ['label' => 'Manual Verification', 'count' => $verification_count],
         ];
 
         echo '<h2 class="nav-tab-wrapper">';
-        foreach ($tabs as $tab_key => $tab_label) {
+        foreach ($tabs as $tab_key => $tab_data) {
             $active = ($active_tab === $tab_key) ? ' nav-tab-active' : '';
             $url = admin_url('admin.php?page=fdm-data-status&tab=' . $tab_key);
-            echo '<a href="' . esc_url($url) . '" class="nav-tab' . $active . '">' . esc_html($tab_label) . '</a>';
+            $count_badge = $tab_data['count'] > 0 ? ' <span class="count" style="background:#ca4a1f; color:#fff; padding:2px 6px; border-radius:10px; font-size:11px; margin-left:4px;">' . number_format($tab_data['count']) . '</span>' : '';
+            echo '<a href="' . esc_url($url) . '" class="nav-tab' . $active . '">' . esc_html($tab_data['label']) . $count_badge . '</a>';
         }
         echo '</h2>';
         echo '<br>';
@@ -464,16 +512,16 @@ class FDM_Admin_Data_Status {
         echo '<tr>';
         echo '<th rowspan="2" style="text-align:left; padding-left:15px;">Year</th>';
         echo '<th colspan="7" class="group-header">Match Data</th>';
-        echo '<th colspan="5" class="group-header">Reference Data</th>';
+        echo '<th colspan="7" class="group-header">Reference Data</th>';
         echo '</tr>';
         // Column headers
         echo '<tr>';
         echo '<th>Fixtures</th><th>Lineups</th><th>Commentary</th><th>Key Events</th><th>Plays</th><th>Player Stats</th><th>Team Stats</th>';
-        echo '<th>Teams</th><th>Players</th><th>Standings</th><th>Rosters</th><th>Venues</th>';
+        echo '<th>Teams</th><th>Players</th><th>Standings</th><th>Rosters</th><th>Venues</th><th>Transfers</th><th>Season Stats</th>';
         echo '</tr>';
         echo '</thead>';
         echo '<tbody id="fdm-table-body">';
-        echo '<tr><td colspan="13" style="text-align:center; padding:20px;">Loading data...</td></tr>';
+        echo '<tr><td colspan="15" style="text-align:center; padding:20px;">Loading data...</td></tr>';
         echo '</tbody></table>';
         echo '</div>';
 
@@ -531,8 +579,20 @@ class FDM_Admin_Data_Status {
         echo '</tbody></table>';
         echo '</div>';
 
-        // Auto-refresh script
+        // Modal for league detail
         ?>
+        <div id="fdm-league-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:100000;">
+            <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:8px; max-width:95%; max-height:90%; overflow:auto; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+                <div style="padding:20px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:#fff; z-index:1;">
+                    <h2 id="fdm-modal-title" style="margin:0;">League Detail</h2>
+                    <button type="button" id="fdm-modal-close" style="background:none; border:none; font-size:24px; cursor:pointer; padding:0 10px;">&times;</button>
+                </div>
+                <div id="fdm-modal-content" style="padding:20px; min-width:800px;">
+                    Loading...
+                </div>
+            </div>
+        </div>
+
         <script>
         jQuery(document).ready(function($) {
             function refreshLeagues() {
@@ -544,6 +604,38 @@ class FDM_Admin_Data_Status {
             }
             refreshLeagues();
             setInterval(refreshLeagues, 10000);
+
+            // League click handler - show modal
+            $(document).on('click', '.fdm-league-link', function(e) {
+                e.preventDefault();
+                var league = $(this).data('league');
+                var name = $(this).text();
+                $('#fdm-modal-title').text(name + ' (' + league + ')');
+                $('#fdm-modal-content').html('<p style="text-align:center; padding:40px;">Loading...</p>');
+                $('#fdm-league-modal').show();
+
+                $.post(ajaxurl, { action: 'fdm_league_detail', league: league }, function(response) {
+                    if (response.success) {
+                        $('#fdm-modal-content').html(response.data.html);
+                    } else {
+                        $('#fdm-modal-content').html('<p style="color:red;">Error loading data</p>');
+                    }
+                });
+            });
+
+            // Close modal
+            $('#fdm-modal-close, #fdm-league-modal').on('click', function(e) {
+                if (e.target === this) {
+                    $('#fdm-league-modal').hide();
+                }
+            });
+
+            // ESC to close
+            $(document).on('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    $('#fdm-league-modal').hide();
+                }
+            });
         });
         </script>
         <?php
@@ -569,9 +661,13 @@ class FDM_Admin_Data_Status {
         echo '<div class="fdm-legend-item"><span style="display:inline-block;width:16px;height:16px;background:#f5f5f5;border:1px solid #e0e0e0;margin-right:4px;vertical-align:middle;"></span> <span class="fdm-status-na">—</span> N/A</div>';
         echo '</div>';
 
-        // Get expected counts from espn_availability
+        // Get expected counts from espn_availability (excluding women's leagues)
         $expected_data = $e_db->get_results($e_db->prepare("
-            SELECT * FROM espn_availability WHERE season_year = %d ORDER BY league_code ASC
+            SELECT * FROM espn_availability WHERE season_year = %d
+            AND league_code NOT LIKE '%%.w.%%'
+            AND league_code NOT LIKE '%%nwsl%%'
+            AND league_code NOT LIKE '%%wchampions%%'
+            ORDER BY league_code ASC
         ", $year), ARRAY_A);
 
         $expected = [];
@@ -588,8 +684,12 @@ class FDM_Admin_Data_Status {
         $playerstats_map = $this->get_player_stats_count_by_league($e_db, $year);
         $teamstats_map = $this->get_joined_count_by_league($e_db, 'teamStats', $year);
         $teams_map = $this->get_teams_count_by_league($e_db, $year);
+        $players_map = $this->get_players_count_by_league($e_db, $year);
         $standings_map = $this->get_standings_count_by_league($e_db, $year);
         $rosters_map = $this->get_rosters_count_by_league($e_db, $year);
+        $venues_map = $this->get_venues_count_by_league($e_db, $year);
+        $transfers_map = $this->get_transfers_count_by_league($e_db, $year);
+        $season_stats_map = $this->get_season_stats_count_by_league($e_db, $year);
 
         // Get all leagues
         $all_leagues = array_unique(array_merge(
@@ -605,17 +705,17 @@ class FDM_Admin_Data_Status {
         echo '<tr>';
         echo '<th rowspan="2" style="text-align:left; padding-left:15px;">League</th>';
         echo '<th colspan="7" class="group-header">Match Data</th>';
-        echo '<th colspan="4" class="group-header">Reference Data</th>';
+        echo '<th colspan="7" class="group-header">Reference Data</th>';
         echo '</tr>';
         echo '<tr>';
         echo '<th>Fixtures</th><th>Lineups</th><th>Commentary</th><th>Key Events</th><th>Plays</th><th>Player Stats</th><th>Team Stats</th>';
-        echo '<th>Teams</th><th>Standings</th><th>Rosters</th><th>Venues</th>';
+        echo '<th>Teams</th><th>Players</th><th>Standings</th><th>Rosters</th><th>Venues</th><th>Transfers</th><th>Season Stats</th>';
         echo '</tr>';
         echo '</thead>';
         echo '<tbody>';
 
         if (empty($all_leagues)) {
-            echo '<tr><td colspan="12" style="text-align:center; padding:20px;">No data found for ' . esc_html($year) . '</td></tr>';
+            echo '<tr><td colspan="15" style="text-align:center; padding:20px;">No data found for ' . esc_html($year) . '</td></tr>';
         } else {
             foreach ($all_leagues as $league) {
                 $exp = isset($expected[$league]) ? $expected[$league] : [];
@@ -629,8 +729,12 @@ class FDM_Admin_Data_Status {
                 $pst_exp = !empty($exp['player_stats_available']) ? $fix_exp : null;
                 $tst_exp = !empty($exp['team_stats_available']) ? $fix_exp : null;
                 $tea_exp = isset($exp['teams_available']) ? intval($exp['teams_available']) : null;
+                $pla_exp = isset($exp['players_available']) ? intval($exp['players_available']) : null;
                 $std_exp = !empty($exp['standings_available']) ? 1 : null;
                 $ros_exp = !empty($exp['roster_available']) ? 1 : null;
+                $ven_exp = !empty($exp['venues_available']) ? $fix_exp : null;
+                $tra_exp = isset($exp['transfers_available']) ? intval($exp['transfers_available']) : null;
+                $sst_exp = !empty($exp['season_stats_available']) ? 1 : null;
 
                 echo '<tr>';
                 echo '<td class="year-cell">' . esc_html($league) . '</td>';
@@ -642,9 +746,12 @@ class FDM_Admin_Data_Status {
                 echo $this->render_cell($playerstats_map[$league] ?? 0, $pst_exp);
                 echo $this->render_cell($teamstats_map[$league] ?? 0, $tst_exp);
                 echo $this->render_cell($teams_map[$league] ?? 0, $tea_exp);
+                echo $this->render_cell($players_map[$league] ?? 0, $pla_exp);
                 echo $this->render_cell($standings_map[$league] ?? 0, $std_exp);
                 echo $this->render_cell($rosters_map[$league] ?? 0, $ros_exp);
-                echo $this->render_cell(0, null); // Venues - TODO
+                echo $this->render_cell($venues_map[$league] ?? 0, $ven_exp);
+                echo $this->render_cell($transfers_map[$league] ?? 0, $tra_exp);
+                echo $this->render_cell($season_stats_map[$league] ?? 0, $sst_exp);
                 echo '</tr>';
             }
         }
@@ -768,13 +875,86 @@ class FDM_Admin_Data_Status {
     }
 
     /**
+     * Helper: Get players count by league (from lineups)
+     */
+    private function get_players_count_by_league($e_db, $year) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT f.league_code, COUNT(DISTINCT l.athleteid) as cnt
+            FROM fixtures f
+            INNER JOIN lineups l ON l.eventid = f.eventid
+            WHERE f.season_year = %d AND f.league_code IS NOT NULL
+            GROUP BY f.league_code
+        ", $year), ARRAY_A);
+
+        $map = [];
+        foreach ($results as $row) {
+            $map[$row['league_code']] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    /**
+     * Helper: Get venues count by league
+     */
+    private function get_venues_count_by_league($e_db, $year) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT f.league_code, COUNT(DISTINCT f.venueid) as cnt
+            FROM fixtures f
+            WHERE f.season_year = %d AND f.league_code IS NOT NULL AND f.venueid IS NOT NULL
+            GROUP BY f.league_code
+        ", $year), ARRAY_A);
+
+        $map = [];
+        foreach ($results as $row) {
+            $map[$row['league_code']] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    /**
+     * Helper: Get transfers count by league
+     */
+    private function get_transfers_count_by_league($e_db, $year) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT league as league_code, COUNT(*) as cnt
+            FROM transfers
+            WHERE season = %d AND league IS NOT NULL
+            GROUP BY league
+        ", $year), ARRAY_A);
+
+        $map = [];
+        foreach ($results as $row) {
+            $map[$row['league_code']] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    /**
+     * Helper: Get season stats count by league
+     */
+    private function get_season_stats_count_by_league($e_db, $year) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT league as league_code, COUNT(DISTINCT player_id) as cnt
+            FROM season_player_stats
+            WHERE season = %d AND league IS NOT NULL
+            GROUP BY league
+        ", $year), ARRAY_A);
+
+        $map = [];
+        foreach ($results as $row) {
+            $map[$row['league_code']] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    /**
      * AJAX handler for dashboard refresh
      * Returns HTML for the table body
      */
     public function ajax_refresh_data() {
         $e_db = $this->get_e_db();
 
-        // Get all years from espn_availability
+        // Get all years from espn_availability (excluding women's leagues)
         $years_expected = $e_db->get_results("
             SELECT
                 season_year,
@@ -788,8 +968,14 @@ class FDM_Admin_Data_Status {
                 SUM(teams_available) as tea_exp,
                 SUM(players_available) as pla_exp,
                 SUM(CASE WHEN standings_available = 1 THEN 1 ELSE 0 END) as std_exp,
-                SUM(CASE WHEN roster_available = 1 THEN 1 ELSE 0 END) as ros_exp
+                SUM(CASE WHEN roster_available = 1 THEN 1 ELSE 0 END) as ros_exp,
+                SUM(CASE WHEN venues_available = 1 THEN fixtures_available ELSE 0 END) as ven_exp,
+                SUM(COALESCE(transfers_available, 0)) as tra_exp,
+                SUM(CASE WHEN season_stats_available = 1 THEN 1 ELSE 0 END) as sst_exp
             FROM espn_availability
+            WHERE league_code NOT LIKE '%.w.%'
+            AND league_code NOT LIKE '%nwsl%'
+            AND league_code NOT LIKE '%wchampions%'
             GROUP BY season_year
             ORDER BY season_year DESC
         ", ARRAY_A);
@@ -799,9 +985,12 @@ class FDM_Admin_Data_Status {
             $expected_by_year[intval($row['season_year'])] = $row;
         }
 
-        // Get probed leagues per year (to filter scraped counts)
+        // Get probed leagues per year (to filter scraped counts), excluding women's leagues
         $probed_leagues = $e_db->get_results("
             SELECT season_year, league_code FROM espn_availability
+            WHERE league_code NOT LIKE '%.w.%'
+            AND league_code NOT LIKE '%nwsl%'
+            AND league_code NOT LIKE '%wchampions%'
         ", ARRAY_A);
         $probed_by_year = [];
         foreach ($probed_leagues as $row) {
@@ -825,19 +1014,15 @@ class FDM_Admin_Data_Status {
         $std_by_year = $this->get_standings_count_by_year($e_db);
         $ros_by_year = $this->get_rosters_count_by_year($e_db);
         $ven_by_year = $this->get_venues_count_by_year($e_db);
+        $tra_by_year = $this->get_transfers_count_by_year($e_db);
+        $sst_by_year = $this->get_season_stats_count_by_year($e_db);
 
-        // Combine all years
-        $all_years = array_unique(array_merge(
-            array_keys($expected_by_year),
-            array_keys($fix_by_year)
-        ));
-        rsort($all_years);
+        // Always show years 2001-2025 (descending)
+        $all_years = range(2025, 2001);
 
         ob_start();
 
-        if (empty($all_years)) {
-            echo '<tr><td colspan="13" style="text-align:center; padding:20px;">No data available. Run the ESPN availability prober to populate expected counts.</td></tr>';
-        } else {
+        {
             foreach ($all_years as $year) {
                 $exp = isset($expected_by_year[$year]) ? $expected_by_year[$year] : [];
 
@@ -856,7 +1041,9 @@ class FDM_Admin_Data_Status {
                 echo $this->render_cell($pla_by_year[$year] ?? 0, $exp['pla_exp'] ?? null);
                 echo $this->render_cell($std_by_year[$year] ?? 0, $exp['std_exp'] ?? null);
                 echo $this->render_cell($ros_by_year[$year] ?? 0, $exp['ros_exp'] ?? null);
-                echo $this->render_cell($ven_by_year[$year] ?? 0, null);
+                echo $this->render_cell($ven_by_year[$year] ?? 0, $exp['ven_exp'] ?? null);
+                echo $this->render_cell($tra_by_year[$year] ?? 0, $exp['tra_exp'] ?? null);
+                echo $this->render_cell($sst_by_year[$year] ?? 0, $exp['sst_exp'] ?? null);
                 echo '</tr>';
             }
         }
@@ -1008,9 +1195,51 @@ class FDM_Admin_Data_Status {
     }
 
     private function get_venues_count_by_year($e_db) {
-        // Venues don't have year - count total
-        $count = $e_db->get_var("SELECT COUNT(*) FROM venues");
-        return []; // Return empty - venues aren't year-specific
+        // Venues don't have year - count distinct venues from fixtures per year
+        $results = $e_db->get_results("
+            SELECT f.season_year, COUNT(DISTINCT f.venueid) as cnt
+            FROM fixtures f
+            WHERE f.season_year IS NOT NULL AND f.venueid IS NOT NULL
+            GROUP BY f.season_year
+        ", ARRAY_A);
+
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season_year'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    private function get_transfers_count_by_year($e_db) {
+        // transfers table has 'season' column (e.g., "2024")
+        $results = $e_db->get_results("
+            SELECT season, COUNT(*) as cnt
+            FROM transfers
+            WHERE season IS NOT NULL
+            GROUP BY season
+        ", ARRAY_A);
+
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    private function get_season_stats_count_by_year($e_db) {
+        // season_player_stats table has 'season' column
+        $results = $e_db->get_results("
+            SELECT season, COUNT(DISTINCT player_id) as cnt
+            FROM season_player_stats
+            WHERE season IS NOT NULL
+            GROUP BY season
+        ", ARRAY_A);
+
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season'])] = intval($row['cnt']);
+        }
+        return $map;
     }
 
     /**
@@ -1021,9 +1250,13 @@ class FDM_Admin_Data_Status {
         $e_db = $this->get_e_db();
         $years = range(2024, 2001);
 
-        // Get ALL configured leagues from league_permissions
+        // Get ALL configured leagues from league_permissions (excluding women's leagues)
         $all_leagues_data = $e_db->get_col("
-            SELECT DISTINCT league_code FROM league_permissions ORDER BY league_code
+            SELECT DISTINCT league_code FROM league_permissions
+            WHERE league_code NOT LIKE '%.w.%'
+            AND league_code NOT LIKE '%nwsl%'
+            AND league_code NOT LIKE '%wchampions%'
+            ORDER BY league_code
         ");
 
         // If no leagues in permissions, fall back to what we have
@@ -1032,9 +1265,13 @@ class FDM_Admin_Data_Status {
         }
 
         // Get all expected data from espn_availability (league × year → fixtures_available)
+        // Excluding women's leagues
         $expected_data = $e_db->get_results("
             SELECT league_code, season_year, fixtures_available
             FROM espn_availability
+            WHERE league_code NOT LIKE '%.w.%'
+            AND league_code NOT LIKE '%nwsl%'
+            AND league_code NOT LIKE '%wchampions%'
             ORDER BY league_code, season_year DESC
         ", ARRAY_A);
 
@@ -1049,10 +1286,14 @@ class FDM_Admin_Data_Status {
         }
 
         // Get all scraped fixture counts (league × year → count)
+        // Excluding women's leagues
         $scraped_data = $e_db->get_results("
             SELECT league_code, season_year, COUNT(DISTINCT eventid) as cnt
             FROM fixtures
             WHERE league_code IS NOT NULL AND season_year IS NOT NULL
+            AND league_code NOT LIKE '%.w.%'
+            AND league_code NOT LIKE '%nwsl%'
+            AND league_code NOT LIKE '%wchampions%'
             GROUP BY league_code, season_year
         ", ARRAY_A);
 
@@ -1081,7 +1322,7 @@ class FDM_Admin_Data_Status {
         } else {
             foreach ($all_leagues as $league) {
                 echo '<tr>';
-                echo '<td class="year-cell">' . esc_html($league) . '</td>';
+                echo '<td class="year-cell"><a href="#" class="fdm-league-link" data-league="' . esc_attr($league) . '">' . esc_html($league) . '</a></td>';
 
                 foreach ($years as $year) {
                     $scr = isset($scraped[$league][$year]) ? $scraped[$league][$year] : 0;
@@ -1110,15 +1351,12 @@ class FDM_Admin_Data_Status {
      * AJAX handler for prober progress
      */
     public function ajax_prober_progress() {
-        $e_db = $this->get_e_db();
-
-        $probed = intval($e_db->get_var("SELECT COUNT(DISTINCT league_code) FROM espn_availability"));
-        // Use probed count as total once complete, otherwise estimate
-        $total = $probed > 0 ? $probed : 220;
-
+        $progress = $this->get_prober_progress();
         wp_send_json_success([
-            'probed' => $probed,
-            'total' => $total
+            'probed' => $progress['probed'],
+            'total' => $progress['total'],
+            'is_running' => $progress['is_running'],
+            'is_complete' => $progress['is_complete']
         ]);
     }
 
@@ -1131,5 +1369,396 @@ class FDM_Admin_Data_Status {
             'completed' => $progress['completed'],
             'total' => $progress['total']
         ]);
+    }
+
+    /**
+     * AJAX handler for league detail popup
+     * Shows all 14 data types for a single league across all years
+     */
+    public function ajax_league_detail() {
+        $league = isset($_POST['league']) ? sanitize_text_field($_POST['league']) : '';
+        if (empty($league)) {
+            wp_send_json_error('No league specified');
+        }
+
+        $e_db = $this->get_e_db();
+        $years = range(2025, 2001);
+
+        // Get expected data for this league
+        $expected_data = $e_db->get_results($e_db->prepare("
+            SELECT * FROM espn_availability WHERE league_code = %s ORDER BY season_year DESC
+        ", $league), ARRAY_A);
+
+        $expected = [];
+        foreach ($expected_data as $row) {
+            $expected[intval($row['season_year'])] = $row;
+        }
+
+        // Get scraped counts for this league
+        $fix_map = $this->get_count_by_year_for_league($e_db, 'fixtures', 'eventid', $league);
+        $lin_map = $this->get_joined_count_by_year_for_league($e_db, 'lineups', $league);
+        $com_map = $this->get_joined_count_by_year_for_league($e_db, 'commentary', $league);
+        $key_map = $this->get_joined_count_by_year_for_league($e_db, 'keyEvents', $league);
+        $ply_map = $this->get_joined_count_by_year_for_league($e_db, 'plays', $league);
+        $pst_map = $this->get_player_stats_count_by_year_for_league($e_db, $league);
+        $tst_map = $this->get_joined_count_by_year_for_league($e_db, 'teamStats', $league);
+        $tea_map = $this->get_teams_count_by_year_for_league($e_db, $league);
+        $pla_map = $this->get_players_count_by_year_for_league($e_db, $league);
+        $ven_map = $this->get_venues_count_by_year_for_league($e_db, $league);
+        $tra_map = $this->get_transfers_count_by_year_for_league($e_db, $league);
+
+        ob_start();
+        ?>
+        <table class="fdm-status-table" style="min-width:100%;">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="text-align:left; padding-left:15px;">Year</th>
+                    <th colspan="7" class="group-header">Match Data</th>
+                    <th colspan="5" class="group-header">Reference Data</th>
+                </tr>
+                <tr>
+                    <th>Fixtures</th><th>Lineups</th><th>Commentary</th><th>Key Events</th><th>Plays</th><th>Player Stats</th><th>Team Stats</th>
+                    <th>Teams</th><th>Players</th><th>Venues</th><th>Transfers</th><th>Standings</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($years as $year):
+                $exp = isset($expected[$year]) ? $expected[$year] : [];
+                $fix_exp = isset($exp['fixtures_available']) ? intval($exp['fixtures_available']) : null;
+
+                // For match-level data, expected = fixtures count if available flag is set
+                $lin_exp = !empty($exp['lineups_available']) ? $fix_exp : (!empty($fix_exp) ? 0 : null);
+                $com_exp = !empty($exp['commentary_available']) ? $fix_exp : (!empty($fix_exp) ? 0 : null);
+                $key_exp = !empty($exp['key_events_available']) ? $fix_exp : (!empty($fix_exp) ? 0 : null);
+                $ply_exp = !empty($exp['plays_available']) ? $fix_exp : (!empty($fix_exp) ? 0 : null);
+                $pst_exp = !empty($exp['player_stats_available']) ? $fix_exp : (!empty($fix_exp) ? 0 : null);
+                $tst_exp = !empty($exp['team_stats_available']) ? $fix_exp : (!empty($fix_exp) ? 0 : null);
+                $tea_exp = isset($exp['teams_available']) ? intval($exp['teams_available']) : null;
+                $pla_exp = isset($exp['players_available']) ? intval($exp['players_available']) : null;
+                $ven_exp = !empty($exp['venues_available']) ? $fix_exp : (!empty($fix_exp) ? 0 : null);
+                $tra_exp = isset($exp['transfers_available']) ? intval($exp['transfers_available']) : null;
+                $std_exp = !empty($exp['standings_available']) ? 1 : (!empty($fix_exp) ? 0 : null);
+            ?>
+                <tr>
+                    <td class="year-cell" style="font-weight:bold;"><?php echo esc_html($year); ?></td>
+                    <?php
+                    echo $this->render_cell($fix_map[$year] ?? 0, $fix_exp);
+                    echo $this->render_cell($lin_map[$year] ?? 0, $lin_exp);
+                    echo $this->render_cell($com_map[$year] ?? 0, $com_exp);
+                    echo $this->render_cell($key_map[$year] ?? 0, $key_exp);
+                    echo $this->render_cell($ply_map[$year] ?? 0, $ply_exp);
+                    echo $this->render_cell($pst_map[$year] ?? 0, $pst_exp);
+                    echo $this->render_cell($tst_map[$year] ?? 0, $tst_exp);
+                    echo $this->render_cell($tea_map[$year] ?? 0, $tea_exp);
+                    echo $this->render_cell($pla_map[$year] ?? 0, $pla_exp);
+                    echo $this->render_cell($ven_map[$year] ?? 0, $ven_exp);
+                    echo $this->render_cell($tra_map[$year] ?? 0, $tra_exp);
+                    echo $this->render_cell(0, $std_exp); // Standings - would need separate query
+                    ?>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php
+        $html = ob_get_clean();
+        wp_send_json_success(['html' => $html]);
+    }
+
+    // Helper methods for league-specific counts
+    private function get_count_by_year_for_league($e_db, $table, $id_col, $league) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT season_year, COUNT(DISTINCT {$id_col}) as cnt
+            FROM {$table}
+            WHERE league_code = %s AND season_year IS NOT NULL
+            GROUP BY season_year
+        ", $league), ARRAY_A);
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season_year'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    private function get_joined_count_by_year_for_league($e_db, $table, $league) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT f.season_year, COUNT(DISTINCT t.eventid) as cnt
+            FROM fixtures f
+            INNER JOIN {$table} t ON t.eventid = f.eventid
+            WHERE f.league_code = %s AND f.season_year IS NOT NULL
+            GROUP BY f.season_year
+        ", $league), ARRAY_A);
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season_year'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    private function get_player_stats_count_by_year_for_league($e_db, $league) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT season, COUNT(DISTINCT athleteid) as cnt
+            FROM playerStats
+            WHERE league = %s AND season IS NOT NULL
+            GROUP BY season
+        ", $league), ARRAY_A);
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    private function get_teams_count_by_year_for_league($e_db, $league) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT season_year, (COUNT(DISTINCT hometeamid) + COUNT(DISTINCT awayteamid)) / 2 as cnt
+            FROM fixtures
+            WHERE league_code = %s AND season_year IS NOT NULL
+            GROUP BY season_year
+        ", $league), ARRAY_A);
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season_year'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    private function get_players_count_by_year_for_league($e_db, $league) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT f.season_year, COUNT(DISTINCT l.athleteid) as cnt
+            FROM fixtures f
+            INNER JOIN lineups l ON l.eventid = f.eventid
+            WHERE f.league_code = %s AND f.season_year IS NOT NULL
+            GROUP BY f.season_year
+        ", $league), ARRAY_A);
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season_year'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    private function get_venues_count_by_year_for_league($e_db, $league) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT season_year, COUNT(DISTINCT venueid) as cnt
+            FROM fixtures
+            WHERE league_code = %s AND season_year IS NOT NULL AND venueid IS NOT NULL
+            GROUP BY season_year
+        ", $league), ARRAY_A);
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season_year'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    private function get_transfers_count_by_year_for_league($e_db, $league) {
+        $results = $e_db->get_results($e_db->prepare("
+            SELECT season, COUNT(*) as cnt
+            FROM transfers
+            WHERE league = %s AND season IS NOT NULL
+            GROUP BY season
+        ", $league), ARRAY_A);
+        $map = [];
+        foreach ($results as $row) {
+            $map[intval($row['season'])] = intval($row['cnt']);
+        }
+        return $map;
+    }
+
+    /**
+     * AJAX handler for updating verification status
+     */
+    public function ajax_update_verification_status() {
+        $id = intval($_POST['id'] ?? 0);
+        $status = sanitize_text_field($_POST['status'] ?? '');
+
+        if (!$id || !in_array($status, ['verified_exists', 'verified_missing', 'skipped'])) {
+            wp_send_json_error('Invalid parameters');
+        }
+
+        $e_db = $this->get_e_db();
+        $result = $e_db->update(
+            'espn_manual_verification',
+            ['status' => $status, 'verified_at' => current_time('mysql')],
+            ['id' => $id],
+            ['%s', '%s'],
+            ['%d']
+        );
+
+        if ($result !== false) {
+            wp_send_json_success();
+        } else {
+            wp_send_json_error('Update failed');
+        }
+    }
+
+    /**
+     * Get pending verification count
+     */
+    private function get_verification_pending_count() {
+        $e_db = $this->get_e_db();
+        return intval($e_db->get_var("SELECT COUNT(*) FROM espn_manual_verification WHERE status = 'pending'"));
+    }
+
+    /**
+     * Render Manual Verification tab
+     */
+    private function render_verification_tab() {
+        $e_db = $this->get_e_db();
+
+        // Get counts by status
+        $counts = $e_db->get_results("
+            SELECT status, COUNT(*) as cnt
+            FROM espn_manual_verification
+            GROUP BY status
+        ", ARRAY_A);
+
+        $totals = ['pending' => 0, 'verified_exists' => 0, 'verified_missing' => 0, 'skipped' => 0];
+        foreach ($counts as $row) {
+            $totals[$row['status']] = intval($row['cnt']);
+        }
+
+        // Get counts by data type
+        $data_types = $e_db->get_results("
+            SELECT data_type, COUNT(*) as cnt
+            FROM espn_manual_verification
+            WHERE status = 'pending'
+            GROUP BY data_type
+            ORDER BY cnt DESC
+        ", ARRAY_A);
+
+        $filter_type = isset($_GET['type']) ? sanitize_text_field($_GET['type']) : '';
+
+        // Get pending items
+        $where = "status = 'pending'";
+        if ($filter_type) {
+            $where .= $e_db->prepare(" AND data_type = %s", $filter_type);
+        }
+        $pending = $e_db->get_results("
+            SELECT * FROM espn_manual_verification
+            WHERE {$where}
+            ORDER BY league_code, season_year, data_type
+            LIMIT 200
+        ", ARRAY_A);
+
+        ?>
+        <div class="fdm-header">
+            <h1 class="wp-heading-inline">ESPN Manual Verification</h1>
+        </div>
+        <p class="fdm-subheader">Data the prober couldn't verify automatically. Click URLs to check manually, then mark status.</p>
+
+        <!-- Summary Stats -->
+        <div class="fdm-verification-stats" style="display:flex; gap:20px; margin:20px 0;">
+            <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:15px 25px; text-align:center;">
+                <span style="display:block; font-size:28px; font-weight:600; color:#996800;"><?php echo number_format($totals['pending']); ?></span>
+                <span style="color:#666; font-size:12px; text-transform:uppercase;">Pending</span>
+            </div>
+            <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:15px 25px; text-align:center;">
+                <span style="display:block; font-size:28px; font-weight:600; color:#00a32a;"><?php echo number_format($totals['verified_exists']); ?></span>
+                <span style="color:#666; font-size:12px; text-transform:uppercase;">Verified Exists</span>
+            </div>
+            <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:15px 25px; text-align:center;">
+                <span style="display:block; font-size:28px; font-weight:600; color:#d63638;"><?php echo number_format($totals['verified_missing']); ?></span>
+                <span style="color:#666; font-size:12px; text-transform:uppercase;">Verified Missing</span>
+            </div>
+            <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:15px 25px; text-align:center;">
+                <span style="display:block; font-size:28px; font-weight:600; color:#787c82;"><?php echo number_format($totals['skipped']); ?></span>
+                <span style="color:#666; font-size:12px; text-transform:uppercase;">Skipped</span>
+            </div>
+        </div>
+
+        <!-- Filter by Data Type -->
+        <div style="margin:20px 0; padding:15px; background:#fff; border:1px solid #ccd0d4;">
+            <strong>Filter by type:</strong>
+            <a href="<?php echo esc_url(admin_url('admin.php?page=fdm-data-status&tab=verification')); ?>"
+               class="button <?php echo empty($filter_type) ? 'button-primary' : ''; ?>">
+                All (<?php echo number_format($totals['pending']); ?>)
+            </a>
+            <?php foreach ($data_types as $dt): ?>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=fdm-data-status&tab=verification&type=' . $dt['data_type'])); ?>"
+                   class="button <?php echo $filter_type === $dt['data_type'] ? 'button-primary' : ''; ?>">
+                    <?php echo esc_html(ucfirst(str_replace('_', ' ', $dt['data_type']))); ?>
+                    (<?php echo number_format($dt['cnt']); ?>)
+                </a>
+            <?php endforeach; ?>
+        </div>
+
+        <!-- Verification Table -->
+        <?php if (empty($pending)): ?>
+            <div style="padding:40px; text-align:center; background:#fff; border:1px solid #ccd0d4;">
+                <p>No pending verifications<?php echo $filter_type ? ' for ' . esc_html($filter_type) : ''; ?>.</p>
+            </div>
+        <?php else: ?>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th style="width:200px;">League</th>
+                        <th style="width:60px; text-align:center;">Year</th>
+                        <th style="width:120px;">Data Type</th>
+                        <th>URL to Check</th>
+                        <th style="width:200px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($pending as $item): ?>
+                        <tr data-id="<?php echo esc_attr($item['id']); ?>">
+                            <td>
+                                <strong><?php echo esc_html($item['league_name'] ?: $item['league_code']); ?></strong>
+                                <br><code style="font-size:11px;"><?php echo esc_html($item['league_code']); ?></code>
+                            </td>
+                            <td style="text-align:center;"><?php echo esc_html($item['season_year']); ?></td>
+                            <td>
+                                <span style="display:inline-block; padding:3px 8px; border-radius:3px; font-size:11px; font-weight:500; background:#e7f5ff; color:#0969da;">
+                                    <?php echo esc_html(ucfirst(str_replace('_', ' ', $item['data_type']))); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <a href="<?php echo esc_url($item['check_url']); ?>" target="_blank" style="font-family:monospace; font-size:11px; word-break:break-all;" title="API URL">
+                                    API
+                                </a>
+                                <?php if (!empty($item['site_url'])): ?>
+                                    &nbsp;|&nbsp;
+                                    <a href="<?php echo esc_url($item['site_url']); ?>" target="_blank" style="font-size:11px;" title="ESPN Website">
+                                        Website
+                                    </a>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <button type="button" class="button button-small button-primary fdm-verify-action" data-id="<?php echo esc_attr($item['id']); ?>" data-status="verified_exists">Exists</button>
+                                <button type="button" class="button button-small fdm-verify-action" data-id="<?php echo esc_attr($item['id']); ?>" data-status="verified_missing">Missing</button>
+                                <button type="button" class="button button-small fdm-verify-action" data-id="<?php echo esc_attr($item['id']); ?>" data-status="skipped">Skip</button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+
+        <script>
+        jQuery(document).ready(function($) {
+            $('.fdm-verify-action').on('click', function() {
+                var btn = $(this);
+                var id = btn.data('id');
+                var status = btn.data('status');
+                var row = btn.closest('tr');
+
+                btn.prop('disabled', true).text('...');
+
+                $.post(ajaxurl, {
+                    action: 'fdm_update_verification_status',
+                    id: id,
+                    status: status
+                }, function(response) {
+                    if (response.success) {
+                        row.fadeOut(300, function() { $(this).remove(); });
+                    } else {
+                        alert('Error: ' + (response.data || 'Unknown error'));
+                        btn.prop('disabled', false);
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
     }
 }

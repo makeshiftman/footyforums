@@ -29,6 +29,9 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 if ( is_admin() ) {
     require_once __DIR__ . '/includes/admin/admin-menu.php';
     require_once __DIR__ . '/includes/admin/class-fdm-admin-data-status.php';
+    require_once __DIR__ . '/includes/admin/class-fdm-admin-wikidata-review.php';
+    // Manual verification is now a tab in FDM_Admin_Data_Status
+    // require_once __DIR__ . '/includes/admin/class-fdm-admin-manual-verification.php';
     new FDM_Admin_Data_Status();
 }
 
