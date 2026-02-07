@@ -12,7 +12,104 @@ See: .planning/PROJECT.md (updated 2026-01-28)
 Phase: 17 of 22 (Soccer API Bootstrap)
 Plan: Not started
 Status: Ready to plan Phase 17
-Last activity: 2026-02-03 — Created v3.0 milestone, imported 394 new ESPN clubs
+Last activity: 2026-02-07 — Team type classification + Wikidata review UI improvements
+
+## Session: 2026-02-07 (Team Type Classification)
+
+### Team Type Column Added
+
+Added `team_type` ENUM column to clubs table to differentiate between club and national teams:
+
+**Column definition:**
+```sql
+team_type ENUM('club', 'national', 'national_youth', 'club_youth') NOT NULL DEFAULT 'club'
+```
+
+**Classification results:**
+| Type | Count |
+|------|-------|
+| club | 3,283 (default) |
+| national | 218 (senior national teams) |
+| national_youth | 192 (U-17, U-19, U-20, U-21, U-23) |
+| club_youth | 24 (B teams, reserves, U-23 club teams) |
+
+**Rationale:** National teams were polluting the clubs table and being offered as Wikidata matches. Instead of a separate table (which would break matches table FK), added team_type column for filtering.
+
+### Wikidata Review UI Improvements
+
+- Fixed Transfermarkt URL pattern (`/verein/` → `/startseite/verein/`)
+- Added `has_ids` filter: `any` (TM/FBref/Soccerway) or `all` (TM+FBref)
+- Added Transfermarkt logo display alongside Wikidata logo
+- Deleted women's team clubs (ESPN IDs: 21537, 131298, 21053)
+- Removed 39 non-club entries from Wikidata queue
+
+### External ID Analysis (Manual Approvals)
+
+From 794 manually approved Wikidata matches:
+| Provider | Count | Coverage |
+|----------|-------|----------|
+| Transfermarkt | 480 | 60.5% |
+| Soccerway | 377 | 47.5% |
+| FBref | 242 | 30.5% |
+| WhoScored | 0 | 0% (not in Wikidata) |
+| Sofascore | 0 | 0% (not in Wikidata) |
+
+### Search Script Updated
+
+`search-wikidata-matches.php` now filters by `team_type = 'club'` to prevent national teams from being searched.
+
+## Session: 2026-02-05 (Wikidata & Competition Tiers)
+
+### Wikidata Club Mapping
+
+Overnight batch processing completed:
+- **1,078 / 3,717** clubs now have Wikidata IDs (29%)
+- **1,459** candidates awaiting manual review in WP admin
+- Auto-approve criteria: name >= 90% match, country match, score >= 75%
+
+Improvements made:
+- Increased name weight from 30% to 50% in scoring
+- Added prefix/suffix stripping (FC, AC, SC, etc.) for better name matching
+- Added country code aliases (ENG ↔ England ↔ United Kingdom)
+- Filter checks both label AND description for women's teams
+- ESPN logos now shown alongside Wikidata logos in review UI
+
+### Competition Tier System (NEW)
+
+Built infrastructure to track which league tier each club plays in per season:
+
+**New tables created:**
+- `competition_tiers` — 208 definitions mapping competition codes to types/tiers
+- `club_seasons` — 9,009 records tracking club's primary league per season
+
+**Competition types:**
+- `lea` — Leagues (tiers 1-5)
+- `dom` — Domestic cups (tiers 1-3)
+- `con` — Continental competitions (tiers 1-3)
+- `intl` — International (World Cup, Euros, etc.)
+
+**Coverage:**
+- 100% of 218,509 matches now have tier mappings
+- Season range: 1889 to 2025
+- 460 unique clubs tracked
+
+**Tier distribution (leagues only):**
+| Tier | Club-Seasons |
+|------|-------------|
+| 1 | 3,286 |
+| 2 | 2,293 |
+| 3 | 2,389 |
+| 4 | 1,017 |
+| 5 | 24 |
+
+**Data gap identified:** 2001-2022 has sparse data (only Premier League). Will be filled after ESPN scrape completes.
+
+### Parked for After ESPN Scraping
+
+1. Re-populate `club_seasons` with complete match data
+2. Validate 1,164 tier changes (promotions/relegations)
+3. Fix ~130 clubs with wrong `e_league_code` (cups/UEFA as primary)
+4. Review remaining Wikidata candidates
 
 Progress: ████████░░ 73% (16/22 phases across all milestones)
 
@@ -156,6 +253,11 @@ Recent decisions affecting current work:
 - Python scraper: Use soccerdata library, write directly to MySQL
 - Entity matching: Bootstrap from Soccer API (82K pre-mapped players)
 
+**Team Type Classification (2026-02-07):**
+- Schema: `team_type` ENUM column on clubs table (not separate table — avoids FK complexity)
+- Values: 'club' (default), 'national', 'national_youth', 'club_youth'
+- Filter: Wikidata search only queries `team_type = 'club'`
+
 ### Pending Todos
 
 None yet.
@@ -167,6 +269,8 @@ None yet.
 - **Working directory:** Must use `/Users/kevincasey/Local Sites/footyforums` (NOT Desktop copy)
 - **Scrape still running:** Monitor progress, check for crashes
 - **Lower-tier leagues:** Some leagues (arg.3, arg.4, nga.1) genuinely have no deep data on ESPN — not a bug
+- **Competition tier validation parked:** `club_seasons` has 2001-2022 data gaps. Wait for ESPN scrape to fill gaps before validating 1,164 tier changes.
+- **Wikidata review:** 1,459 candidates ready for manual review in WP admin
 
 ### Roadmap Evolution
 
@@ -190,28 +294,62 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-03
-Current state: v3.0 milestone created, ready to plan Phase 17
+Last session: 2026-02-07
+Current state: Team type classification complete, Wikidata review UI improved, waiting for ESPN scrape to complete
 
-### Files Modified This Session
+### Files Modified This Session (2026-02-07)
+- `cli/search-wikidata-matches.php` - Added `team_type = 'club'` filter
+- `includes/admin/class-fdm-admin-wikidata-review.php` - TM URL fix, has_ids filter, TM logo display
+
+### Database Changes This Session (2026-02-07)
+- Added `team_type` ENUM column to clubs table
+- Classified 218 senior national teams, 192 youth national teams, 24 club youth teams
+- Deleted 3 women's team clubs (ESPN IDs: 21537, 131298, 21053)
+- Removed 39 non-club entries from wikidata_match_queue
+
+### Files Modified Previous Session (2026-02-05)
+- `cli/search-wikidata-matches.php` - Improved scoring weights, name matching, country aliases
+- `includes/admin/class-fdm-admin-wikidata-review.php` - Added ESPN logos alongside Wikidata logos
+- `README.md` - Documented Wikidata and competition tier systems
+
+### Database Changes Previous Session (2026-02-05)
+- Created `competition_tiers` table (208 entries)
+- Created `club_seasons` table (9,009 entries)
+- Updated `clubs.wd_id` for 1,078 clubs via Wikidata matching
+
+### Files Modified Previous Session (2026-02-03)
 - `class-fdm-availability-prober.php` - Fixed false positive lineup detection
 - `class-fdm-e-master-datasource.php` - Added skip logic, `get_season_completion_status()`, `has_deep_data()`
 - `cli/run-historical-scrape.php` - Added `--force` flag support
 - `cli/import-new-espn-clubs.php` - NEW: Import ESPN clubs from e_db to clubs table
 
 ### Resume Commands
-Check scrape status:
+
+**Check ESPN scrape status:**
 ```bash
 tail -50 /tmp/historical-scrape.log
 ```
 
-If scrape crashed, resume with:
+**Resume ESPN scrape if crashed:**
 ```bash
 cd /Users/kevincasey/Local\ Sites/footyforums/app/public && php -d memory_limit=4G wp-content/plugins/football-data-manager/cli/run-historical-scrape.php --years=2023,2022,2021,2020,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010,2009,2008,2007,2006,2005,2004,2003,2002,2001 --mode=full 2>&1 | tee -a /tmp/historical-scrape.log
 ```
 
+**Run more Wikidata matching:**
+```bash
+cd /Users/kevincasey/Local\ Sites/footyforums/app/public/wp-content/plugins/football-data-manager/cli
+php search-wikidata-matches.php --limit=500 --skip-placeholders --auto-approve
+```
+
+**Check Wikidata mapping status:**
+```bash
+php -r '... see cli/ for quick status queries'
+```
+
 ### Next Steps
-1. `/gsd:plan-phase 17` - Plan Soccer API Bootstrap
+1. Review 1,459 Wikidata candidates in WP admin
 2. Monitor v2.0 Phase 15 scrape completion
-3. Execute v3.0 phases 17-22 for club mapping completion
-4. v4.0 Player Mapping after clubs are done
+3. After ESPN scrape: Re-populate `club_seasons`, validate tier changes
+4. `/gsd:plan-phase 17` - Plan Soccer API Bootstrap
+5. Execute v3.0 phases 17-22 for club mapping completion
+6. v4.0 Player Mapping after clubs are done

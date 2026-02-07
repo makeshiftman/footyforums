@@ -13,6 +13,7 @@ Build a comprehensive football data platform with accurate, reconciled data from
 - 🚧 **v1.0 Club ID Mapping** - Phases 1-8 (blocked at Phase 8)
 - 🚧 **v2.0 ESPN Complete Rebuild** - Phases 9-16 (Phase 15 in progress)
 - 🚧 **v3.0 Club Mapping Completion** - Phases 17-22 (in progress)
+- 📋 **v3.1 Competition Tier Validation** - After ESPN scrape (parked)
 
 ## Phases
 
@@ -255,6 +256,32 @@ Plans:
 
 Plans:
 - [ ] 22-01: TBD
+
+---
+
+### 📋 v3.1 Competition Tier Validation (Parked)
+
+**Milestone Goal:** Validate and complete the competition tier system after ESPN scrape fills data gaps.
+
+**Current state (2026-02-05):**
+- `competition_tiers` table: 208 definitions, 100% match coverage
+- `club_seasons` table: 9,009 records, 460 clubs, 1889-2025
+- Data gap: 2001-2022 has only Premier League data (lower divisions missing)
+- 1,164 tier changes detected (570 promotions, 594 relegations)
+- No suspicious multi-tier jumps found
+
+**Blocked by:** v2.0 Phase 15 (ESPN scrape must complete to fill 2001-2022 gaps)
+
+**Tasks when unblocked:**
+- [ ] Re-populate `club_seasons` from complete match data
+- [ ] Review 1,164 tier changes against Wikipedia/historical records
+- [ ] Fix ~130 clubs with wrong `clubs.e_league_code` (cups/UEFA as primary)
+- [ ] Build tier change validation UI (similar to Wikidata review)
+- [ ] Document final accuracy assessment
+
+**Related tables:**
+- `competition_tiers` — Competition code → type/tier mapping
+- `club_seasons` — Club → season → primary league tracking
 
 ---
 
