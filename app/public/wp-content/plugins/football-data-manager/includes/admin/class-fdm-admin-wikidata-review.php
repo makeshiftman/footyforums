@@ -35,6 +35,7 @@ class FDM_Admin_Wikidata_Review {
         add_action('admin_post_fdm_wikidata_approve', [$this, 'handle_approve']);
         add_action('admin_post_fdm_wikidata_reject', [$this, 'handle_reject']);
         add_action('admin_post_fdm_wikidata_skip', [$this, 'handle_skip']);
+        add_action('admin_post_fdm_wikidata_manual', [$this, 'handle_manual']);
     }
 
     public function register_submenu() {
@@ -382,6 +383,18 @@ class FDM_Admin_Wikidata_Review {
                         <input type="hidden" name="redirect" value="<?php echo esc_url($_SERVER['REQUEST_URI']); ?>">
                         <button type="submit" class="button">Skip for now</button>
                     </form>
+
+                    <span style="margin-left:20px; color:#666;">|</span>
+
+                    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:inline-flex; align-items:center; gap:5px; margin-left:20px;">
+                        <?php wp_nonce_field('fdm_wikidata_action', 'fdm_nonce'); ?>
+                        <input type="hidden" name="action" value="fdm_wikidata_manual">
+                        <input type="hidden" name="queue_id" value="<?php echo $item->id; ?>">
+                        <input type="hidden" name="club_id" value="<?php echo $item->club_id; ?>">
+                        <input type="hidden" name="redirect" value="<?php echo esc_url($_SERVER['REQUEST_URI']); ?>">
+                        <input type="text" name="manual_wd_id" placeholder="Q12345" style="width:100px;" pattern="Q[0-9]+" title="Enter Wikidata ID (e.g. Q12345)">
+                        <button type="submit" class="button">Set Manual ID</button>
+                    </form>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -483,6 +496,43 @@ class FDM_Admin_Wikidata_Review {
         $user = wp_get_current_user()->user_login;
 
         $db->query("UPDATE wikidata_match_queue SET review_status = 'skipped', reviewed_at = NOW(), reviewed_by = '" . $db->real_escape_string($user) . "' WHERE id = $queue_id");
+
+        wp_redirect($redirect);
+        exit;
+    }
+}
+
+    public function handle_manual() {
+        if (!check_admin_referer('fdm_wikidata_action', 'fdm_nonce')) {
+            wp_die('Security check failed');
+        }
+
+        $db = $this->get_db();
+        if (!$db) {
+            wp_die('Database connection failed');
+        }
+
+        $queue_id = intval($_POST['queue_id']);
+        $club_id = intval($_POST['club_id']);
+        $manual_wd_id = sanitize_text_field($_POST['manual_wd_id']);
+        $redirect = esc_url_raw($_POST['redirect']);
+        $user = wp_get_current_user()->user_login;
+
+        // Validate Wikidata ID format
+        if (!preg_match('/^Q[0-9]+$/', $manual_wd_id)) {
+            wp_die('Invalid Wikidata ID format. Must be like Q12345');
+        }
+
+        // Update the club with the manual Wikidata ID
+        $db->query("UPDATE clubs SET wd_id = '" . $db->real_escape_string($manual_wd_id) . "', last_updated = NOW() WHERE id = " . $club_id);
+
+        // Mark queue item as approved (manual)
+        if ($queue_id > 0) {
+            $db->query("UPDATE wikidata_match_queue SET review_status = 'approved', reviewed_at = NOW(), reviewed_by = '" . $db->real_escape_string($user) . " (manual: $manual_wd_id)' WHERE id = $queue_id");
+
+            // Auto-reject other pending candidates for this club
+            $db->query("UPDATE wikidata_match_queue SET review_status = 'rejected', reviewed_at = NOW(), reviewed_by = 'auto-rejected' WHERE club_id = $club_id AND id != $queue_id AND review_status = 'pending'");
+        }
 
         wp_redirect($redirect);
         exit;

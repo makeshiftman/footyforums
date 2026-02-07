@@ -8,7 +8,7 @@
  * - City match
  * - League match
  *
- * Usage: php search-wikidata-matches.php [--limit=N] [--country=ENG] [--min-confidence=medium] [--skip-placeholders] [--delay=2] [--auto-approve]
+ * Usage: php search-wikidata-matches.php [--limit=N] [--country=ENG] [--league=top|uefa] [--min-confidence=medium] [--skip-placeholders] [--delay=2] [--auto-approve]
  */
 
 if (php_sapi_name() !== 'cli') {
@@ -18,6 +18,7 @@ if (php_sapi_name() !== 'cli') {
 // Parse arguments
 $limit = 10;
 $country_filter = null;
+$league_filter = null;
 $min_confidence = null;
 $skip_placeholders = false;
 $delay = 2; // Increased default delay for rate limiting
@@ -29,6 +30,9 @@ foreach ($argv as $arg) {
     }
     if (strpos($arg, '--country=') === 0) {
         $country_filter = strtoupper(substr($arg, 10));
+    }
+    if (strpos($arg, '--league=') === 0) {
+        $league_filter = strtolower(substr($arg, 9));
     }
     if (strpos($arg, '--min-confidence=') === 0) {
         $min_confidence = substr($arg, 17);
@@ -47,6 +51,7 @@ foreach ($argv as $arg) {
 echo "=== Search Wikidata for Club Matches ===\n";
 echo "Limit: $limit clubs\n";
 echo $country_filter ? "Country filter: $country_filter\n" : "";
+echo $league_filter ? "League filter: $league_filter\n" : "";
 echo $skip_placeholders ? "Skipping placeholder names\n" : "";
 echo "Delay between requests: {$delay}s\n";
 echo $auto_approve ? "Auto-approve: ON (name>=90%, country match, score>=75)\n" : "";
@@ -85,6 +90,16 @@ $sql = "SELECT c.id, c.canonical_name, c.full_name, c.country, c.home_city, c.e_
 
 if ($country_filter) {
     $sql .= " AND c.e_league_code LIKE '" . $db->real_escape_string(strtolower($country_filter)) . ".%'";
+}
+
+// League filter: 'top' = top 2 tiers, 'uefa' = UEFA competitions
+if ($league_filter === 'top') {
+    $sql .= " AND c.e_league_code REGEXP '^[a-z]{3}\\.[1-2]$'";
+} elseif ($league_filter === 'uefa') {
+    $sql .= " AND c.e_league_code LIKE 'uefa.%'";
+} elseif ($league_filter === 'notable') {
+    // Top 2 tiers OR UEFA competitions
+    $sql .= " AND (c.e_league_code REGEXP '^[a-z]{3}\\.[1-2]$' OR c.e_league_code LIKE 'uefa.%')";
 }
 
 // Filter out placeholder names (1A, 2B, 3rd Place Group X, etc.)
@@ -132,15 +147,40 @@ while ($club = $result->fetch_assoc()) {
     // Remove country suffix in parentheses if present
     $search_name = preg_replace('/\s*\([^)]+\)\s*$/', '', $search_name);
 
-    // Also create a simplified search term (strip common prefixes for fuzzy matching)
-    // This helps match "AC Ajaccio" to "A.C. Ajaccio", "FC Barcelona" to "F.C. Barcelona", etc.
-    $search_simple = preg_replace('/^(A\.?C\.?|F\.?C\.?|S\.?C\.?|C\.?F\.?|A\.?S\.?|S\.?S\.?|U\.?S\.?|C\.?D\.?|R\.?C\.?|S\.?V\.?|T\.?S\.?V\.?|V\.?f\.?[BL]\.?|1\.\s*F\.?C\.?)\s*/i', '', $search_name);
-    $search_simple = trim($search_simple);
+    // Extract most distinctive word for better matching
+    // "Bayer Leverkusen" -> "Leverkusen" (because "Bayer 04 Leverkusen" won't match "Bayer Leverkusen")
+    // "FC Barcelona" -> "Barcelona"
+    // "Manchester United" -> "Manchester"
+    $common_prefixes = ['fc', 'ac', 'sc', 'cf', 'as', 'ss', 'us', 'cd', 'rc', 'sv', 'tsv', 'vfb', 'vfl', 'fk', 'sk', 'nk', 'gd', 'ud', 'rcd', 'afc', 'bsc', 'tsg'];
+    $common_suffixes = ['fc', 'sc', 'cf', 'united', 'city', 'town', 'athletic', 'albion', 'rovers', 'wanderers', 'hotspur'];
 
-    // Use the simpler term if it's significantly shorter and still meaningful
-    if (strlen($search_simple) >= 4 && strlen($search_simple) < strlen($search_name) - 2) {
-        $search_name = $search_simple;
+    $words = preg_split('/[\s\.]+/', strtolower($search_name));
+    $words = array_filter($words, function($w) { return strlen($w) >= 3; });
+
+    // Find the most distinctive word (not a common prefix/suffix, and long enough)
+    $distinctive_word = null;
+    foreach ($words as $word) {
+        $word_clean = preg_replace('/[^a-z]/', '', $word);
+        if (strlen($word_clean) >= 5 &&
+            !in_array($word_clean, $common_prefixes) &&
+            !in_array($word_clean, $common_suffixes)) {
+            $distinctive_word = $word_clean;
+            break;
+        }
     }
+
+    // If no distinctive word found, try the original approach
+    if (!$distinctive_word) {
+        $search_simple = preg_replace('/^(A\.?C\.?|F\.?C\.?|S\.?C\.?|C\.?F\.?|A\.?S\.?|S\.?S\.?|U\.?S\.?|C\.?D\.?|R\.?C\.?|S\.?V\.?|T\.?S\.?V\.?|V\.?f\.?[BL]\.?|1\.\s*F\.?C\.?)\s*/i', '', $search_name);
+        $search_simple = trim($search_simple);
+        if (strlen($search_simple) >= 4) {
+            $distinctive_word = $search_simple;
+        } else {
+            $distinctive_word = $search_name;
+        }
+    }
+
+    $search_name = $distinctive_word;
 
     // Simplified SPARQL query - women's team filtering done in PHP
     $sparql = '
